@@ -1,6 +1,6 @@
 // src/features/building/mapper.ts — 외부 응답 → 도메인 타입 매핑 (1번 담당)
 // 실제 API 응답(2026-07 확인)에 맞춰 작성. 픽스처: __fixtures__/
-import type { Property, Region } from '@/types';
+import type { Property, Region, PropertyTypeCode } from '@/types';
 
 // ---------- 공통 유틸 ----------
 
@@ -67,6 +67,7 @@ export interface HubTitleItem {
   fmlyCnt?: number;         // 가구수 (다가구)
   hoCnt?: number;           // 호수
   totArea?: number;
+  archArea?: number;
   useAprDay?: string;
   bldNm?: string;
   dongNm?: string;
@@ -84,53 +85,65 @@ export interface HubTitleItem {
  *
  * HUG 담보인정비율이 다가구 80% / 그 외 90%로 갈리므로 이 분기가 중요하다.
  */
-export type HousingType = 'MULTI_UNIT' | 'MULTI_FAMILY' | 'DETACHED' | 'NON_RESIDENTIAL' | 'UNKNOWN';
+export interface HousingResolution {
+  code: PropertyTypeCode;
+  label: string;
+  isMultiFamily: boolean;  // 다가구 여부 (DETACHED 중에서도 가구수>0)
+  basis: string;
+}
 
-export function resolveHousingType(t: HubTitleItem): { type: HousingType; label: string; basis: string } {
+export function resolveHousingType(t: HubTitleItem): HousingResolution {
   const registerType = clean(t.regstrGbCdNm);           // 집합 / 일반
   const purpose = clean(t.mainPurpsCdNm) ?? clean(t.etcPurps);
+  const etc = clean(t.etcPurps) ?? '';
   const fmly = t.fmlyCnt ?? 0;
   const hhld = t.hhldCnt ?? 0;
 
   if (!registerType || !purpose) {
-    return { type: 'UNKNOWN', label: '판정 불가', basis: '대장구분 또는 주용도 값 없음' };
+    return { code: 'OUT_OF_SCOPE', label: '판정 불가', isMultiFamily: false, basis: '대장구분 또는 주용도 값 없음' };
+  }
+
+  const base = `대장구분 ${registerType} · 주용도 ${purpose}`;
+
+  // 주거용 오피스텔은 주용도가 업무시설로 기재되므로 세부용도 문자열로 확인
+  if (/오피스텔/.test(purpose) || /오피스텔/.test(etc)) {
+    return { code: 'OFFICETEL', label: '오피스텔', isMultiFamily: false, basis: `${base} (주거용 여부는 별도 확인 필요)` };
   }
 
   if (purpose === '공동주택' || registerType === '집합') {
+    if (/아파트/.test(purpose) || /아파트/.test(etc)) {
+      return { code: 'APT', label: '아파트', isMultiFamily: false, basis: `${base} · 세대수 ${hhld}` };
+    }
     return {
-      type: 'MULTI_UNIT',
+      code: 'MULTI_UNIT',
       label: '공동주택(다세대·연립·아파트)',
-      basis: `대장구분 ${registerType} · 주용도 ${purpose} · 세대수 ${hhld}`,
+      isMultiFamily: false,
+      basis: `${base} · 세대수 ${hhld}`,
     };
   }
 
   if (purpose === '단독주택') {
-    if (fmly > 0) {
-      return {
-        type: 'MULTI_FAMILY',
-        label: '다가구주택',
-        basis: `대장구분 ${registerType} · 주용도 단독주택 · 가구수 ${fmly}`,
-      };
-    }
+    // 다가구는 단독주택의 한 종류. 가구수(fmlyCnt)로 구분한다.
+    const multi = fmly > 0;
     return {
-      type: 'DETACHED',
-      label: '단독주택',
-      basis: `대장구분 ${registerType} · 주용도 단독주택 · 가구수 0`,
+      code: 'DETACHED',
+      label: multi ? '다가구주택' : '단독주택',
+      isMultiFamily: multi,
+      basis: `${base} · 가구수 ${fmly}`,
     };
   }
 
-  return { type: 'NON_RESIDENTIAL', label: `주택 외 용도(${purpose})`, basis: `주용도 ${purpose}` };
+  return { code: 'OUT_OF_SCOPE', label: `주택 외 용도(${purpose})`, isMultiFamily: false, basis: base };
 }
 
+/** 표제부 응답 배열에서 판정 대상 1건 고르기 */
 /**
  * 대장 종류 표기가 대장구분에 따라 다르다 (2026-07 실응답 확인).
  *   집합대장(다세대·아파트) → '표제부'
  *   일반대장(단독·다가구)   → '일반건축물'   ← 다가구가 여기 속한다
- * 둘 다 받아야 단독·다가구가 누락되지 않는다.
  */
 const TITLE_KINDS = ['표제부', '일반건축물'];
 
-/** 표제부 응답 배열에서 판정 대상 1건 고르기 */
 export function pickTitleItem(
   items: HubTitleItem[],
 ): { item?: HubTitleItem; ambiguous: boolean; onlyAnnex: boolean } {
@@ -151,14 +164,20 @@ export function hubTitleToProperty(
   base: { address: string; region?: Region },
   item: HubTitleItem | undefined,
 ): Property {
-  const p: Property = { address: base.address, region: base.region };
+  const p: Property = {
+    address: base.address,
+    region: base.region,
+    fetchedAt: new Date().toISOString(),  // 명세 F-02: 조회시각 저장
+  };
   if (!item) return p;
 
   const housing = resolveHousingType(item);
   const purpose = clean(item.mainPurpsCdNm);
 
   if (purpose) p.buildingUse = { value: purpose, source: 'PUBLIC_API' };
-  if (housing.type !== 'UNKNOWN') p.housingType = { value: housing.label, source: 'PUBLIC_API' };
+  p.propertyType = { value: housing.code, source: 'PUBLIC_API' };
+  p.propertyTypeLabel = housing.label;
+  p.isMultiFamily = housing.isMultiFamily;
 
   // 위반건축물: 건축HUB 표제부·기본개요 어디에도 필드가 없다 (2026-07 확인).
   // 추정하지 않고 값을 비워 둔다 → 규칙엔진이 '자료 부족'으로 판정하고

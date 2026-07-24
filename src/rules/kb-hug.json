@@ -59,6 +59,15 @@
       "effectiveFrom": "2026-07-01"
     },
     {
+      "ruleId": "KB-HUG-EXISTING-LOAN",
+      "layer": "PRODUCT",
+      "path": "KB_STAR_HUG",
+      "label": "기존 전세자금대출 중복 제한",
+      "checkId": "checkExistingLoan",
+      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
+      "effectiveFrom": "2026-07-01"
+    },
+    {
       "ruleId": "KB-HUG-DOWNPAYMENT",
       "layer": "PRODUCT",
       "path": "KB_STAR_HUG",
@@ -137,6 +146,15 @@
       "path": "KB_STAR_HUG",
       "label": "공식 시세 기반 주택가격 산정",
       "checkId": "alwaysOfficialReview",
+      "sourceUrl": "https://www.khug.or.kr",
+      "effectiveFrom": "2026-07-01"
+    },
+    {
+      "ruleId": "HUG-ELIGIBLE-TYPE",
+      "layer": "GUARANTEE",
+      "path": "KB_STAR_HUG",
+      "label": "대상 주택유형 (공통)",
+      "checkId": "checkEligiblePropertyType",
       "sourceUrl": "https://www.khug.or.kr",
       "effectiveFrom": "2026-07-01"
     }

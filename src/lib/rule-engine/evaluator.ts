@@ -31,13 +31,28 @@ const checkAge: Checker = (c, p) => {
   };
 };
 
+const HH_LABEL = { YES: '세대주', NO: '세대원', PLANNED: '세대주 예정자' } as const;
+
 const checkHouseholder: Checker = (c) => {
-  const ok = c.applicant.isHouseholder;
+  const h = c.applicant.householdHead;
+  const used = [`세대주 상태: ${HH_LABEL[h]} (자기신고)`];
+  if (h === 'YES') {
+    return { verdict: 'NO_PUBLIC_CONFLICT_FOUND', reason: '세대주로 신고됨', usedValues: used, nextAction: '' };
+  }
+  if (h === 'PLANNED') {
+    // 세대주 예정자 인정 여부는 실행일 기준 확인이 필요하다. 미충족으로 단정하지 않는다.
+    return {
+      verdict: 'OFFICIAL_REVIEW_REQUIRED',
+      reason: '세대주 예정자로 신고됨 — 대출 실행일 기준 세대주 요건 충족 여부는 공식 심사에서 확인',
+      usedValues: used,
+      nextAction: '전입신고·세대분리 예정일을 KB 상담 시 알리고 세대주 인정 여부를 확인하세요.',
+    };
+  }
   return {
-    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: ok ? '세대주로 신고됨' : '세대주 아님으로 신고됨 — 세대주(예정자 포함) 요건 확인 필요',
-    usedValues: [`세대주 여부: ${ok ? '예' : '아니오'} (자기신고)`],
-    nextAction: ok ? '' : '전입·세대분리로 세대주 예정자에 해당하는지 KB 상담 시 확인하세요.',
+    verdict: 'PUBLIC_REQUIREMENT_UNMET',
+    reason: '세대원으로 신고됨 — 세대주 요건과 충돌',
+    usedValues: used,
+    nextAction: '전입신고·세대분리로 세대주가 될 수 있는지 확인하세요.',
   };
 };
 
@@ -72,6 +87,25 @@ const checkIncomeCap: Checker = (c, p) => {
     reason: `신고 소득구간 기준 상한 요건 ${ok ? '이내' : '초과'} (한도 계산 아님, O/X 판정)`,
     usedValues: [`소득구간 ${band} (자기신고)`],
     nextAction: ok ? '' : '소득 상한이 다른 상품(예: 청년 맞춤형 7천)을 확인하세요.',
+  };
+};
+
+const checkExistingLoan: Checker = (c) => {
+  const v = c.applicant.existingJeonseLoan;
+  const label = { NONE: '없음', HAS_ONE: '1건', HAS_MULTIPLE: '2건 이상' }[v];
+  if (v === 'NONE') {
+    return {
+      verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+      reason: '기존 전세자금대출 없음으로 신고됨',
+      usedValues: [`기존 전세대출: ${label} (자기신고)`],
+      nextAction: '',
+    };
+  }
+  return {
+    verdict: 'OFFICIAL_REVIEW_REQUIRED',
+    reason: `기존 전세자금대출 ${label} 보유 — 중복 이용 제한 해당 여부는 기관 전산 조회가 필요`,
+    usedValues: [`기존 전세대출: ${label} (자기신고)`],
+    nextAction: '기존 대출의 상환·승계 계획을 정리해 KB 상담 시 중복 제한 해당 여부를 확인하세요.',
   };
 };
 
@@ -178,8 +212,8 @@ const checkSeniorLienRatio: Checker = (c) => {
 
 /** 다가구 여부에 따른 선순위 임차보증금 경고 (HUG 담보인정 다가구 80% / 그 외 90%) */
 const checkMultiFamilyRisk: Checker = (c) => {
-  const t = c.property.housingType?.value;
-  if (!t) {
+  const t = c.property.propertyTypeLabel;
+  if (!c.property.propertyType) {
     return {
       verdict: 'MISSING_INFORMATION',
       reason: '주택 유형 미확인 — 담보인정비율 기준(다가구 80% / 그 외 90%)을 특정할 수 없음',
@@ -187,7 +221,7 @@ const checkMultiFamilyRisk: Checker = (c) => {
       nextAction: '주소를 확인해 건축물대장 조회를 다시 시도하세요.',
     };
   }
-  if (t.includes('다가구')) {
+  if (c.property.isMultiFamily) {
     return {
       verdict: 'OFFICIAL_REVIEW_REQUIRED',
       reason: '다가구주택 — 다른 임차인의 선순위 보증금 총액이 담보인정 한도에 포함되나 계약 전 확인 불가',
@@ -199,6 +233,42 @@ const checkMultiFamilyRisk: Checker = (c) => {
     verdict: 'NO_PUBLIC_CONFLICT_FOUND',
     reason: `${t} — 호별 개별 등기로 선순위 임차보증금 합산 대상 아님`,
     usedValues: [`주택 유형 ${t} (건축HUB)`],
+    nextAction: '',
+  };
+};
+
+/** 공통 규칙: 대상 주택유형 (아파트·연립·다세대·주거용 오피스텔) */
+const checkEligiblePropertyType: Checker = (c) => {
+  const f = c.property.propertyType;
+  if (!f) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '건축물대장 조회 실패 — 대상 주택유형 판정 불가',
+      usedValues: [],
+      nextAction: '주소를 확인해 건축물대장 조회를 다시 시도하세요.',
+    };
+  }
+  const label = c.property.propertyTypeLabel ?? f.value;
+  if (f.value === 'OUT_OF_SCOPE') {
+    return {
+      verdict: 'PUBLIC_REQUIREMENT_UNMET',
+      reason: `${label} — 보증 대상 주택유형(아파트·연립·다세대·주거용 오피스텔)에 해당하지 않음`,
+      usedValues: [`주택 유형 ${label} (건축HUB)`],
+      nextAction: '보증 대상 주택유형의 매물을 검토하세요.',
+    };
+  }
+  if (f.value === 'OFFICETEL') {
+    return {
+      verdict: 'OFFICIAL_REVIEW_REQUIRED',
+      reason: '오피스텔 — 주거용으로 인정되는지는 실제 사용 용도 확인이 필요',
+      usedValues: [`주택 유형 ${label} (건축HUB)`],
+      nextAction: '주거용 오피스텔로 인정받을 수 있는지 KB 상담 시 확인하세요.',
+    };
+  }
+  return {
+    verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+    reason: `${label} — 보증 대상 주택유형에 해당`,
+    usedValues: [`주택 유형 ${label} (건축HUB)`],
     nextAction: '',
   };
 };
@@ -227,6 +297,8 @@ export const CHECKERS: Record<string, Checker> = {
   checkHomeCount,
   checkIncomeCap,
   checkBrokered,
+  checkExistingLoan,
+  checkEligiblePropertyType,
   checkTermMin,
   checkDepositCap,
   checkNotIllegalBuilding,

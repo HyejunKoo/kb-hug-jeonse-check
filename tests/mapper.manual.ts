@@ -16,7 +16,7 @@ const c4 = [
 for (const [name, items] of [['집합 다세대',c1],['일반 다가구',c2],['일반 단독',c3],['부속만(경기장)',c4]] as const) {
   const r = pickTitleItem(items as any);
   const h = r.item ? resolveHousingType(r.item) : undefined;
-  console.log(name.padEnd(16), '→', h ? `${h.type} / ${h.label}` : `item없음 (ambiguous=${r.ambiguous}, onlyAnnex=${r.onlyAnnex})`);
+  console.log(name.padEnd(16), '→', h ? `${h.code} / ${h.label}${h.isMultiFamily ? " (다가구)" : ""}` : `item없음 (ambiguous=${r.ambiguous}, onlyAnnex=${r.onlyAnnex})`);
   if (h) console.log(' '.repeat(19), h.basis);
 }
 console.log('\nlotCode:', JSON.stringify(jusoToLotCode({ admCd:'1144012500', lnbrMnnm:'515', lnbrSlno:'0', mtYn:'0' } as any)));

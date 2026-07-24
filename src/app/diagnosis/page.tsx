@@ -6,7 +6,7 @@ import type {
   Applicant, PlannedContract, Property, RegistryInfo, PathResult,
 } from '@/types';
 import {
-  DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract,
+  DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract, needsSpouseIncome,
 } from '@/features/intake/schema';
 import { toDiagnosisCase } from '@/features/intake/mapper';
 import { searchAddress, fetchBuildingInfo } from '@/features/building/client';
@@ -129,8 +129,13 @@ export default function DiagnosisPage() {
               onChange={(e) => set('age', Number(e.target.value))} />
           </Row>
 
-          <Row label="세대주 여부">
-            <Toggle value={applicant.isHouseholder} onChange={(v) => set('isHouseholder', v)} yes="세대주" no="아님" />
+          <Row label="세대주 상태">
+            <select className="inp" value={applicant.householdHead}
+              onChange={(e) => set('householdHead', e.target.value as Applicant['householdHead'])}>
+              <option value="YES">세대주</option>
+              <option value="NO">세대원</option>
+              <option value="PLANNED">세대주 예정 (곧 전입·세대분리)</option>
+            </select>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
               주민등록등본 맨 위에 나오는 사람이 세대주입니다. 혼자 전입신고를 했다면 보통 세대주,
               부모님 주소에 함께 등록돼 있다면 세대원이에요. 정부24에서 등본을 떼면 확인할 수 있습니다.
@@ -151,12 +156,12 @@ export default function DiagnosisPage() {
               onChange={(e) => set('maritalStatus', e.target.value as Applicant['maritalStatus'])}>
               <option value="SINGLE">미혼</option>
               <option value="MARRIED">기혼</option>
-              <option value="ENGAGED">결혼 예정</option>
+              <option value="PLANNED">결혼 예정</option>
             </select>
             <p className="mt-1 text-xs text-slate-500">소득·주택 보유를 배우자와 합산할지 결정하는 데 씁니다.</p>
           </Row>
 
-          <Row label={applicant.maritalStatus === 'SINGLE' ? '연소득' : '부부합산 연소득'}>
+          <Row label={needsSpouseIncome(applicant) ? '부부합산 연소득' : '본인 연소득'}>
             <select className="inp" value={applicant.incomeBand}
               onChange={(e) => set('incomeBand', e.target.value as Applicant['incomeBand'])}>
               <option value="UNDER_50M">5천만원 이하</option>
@@ -167,6 +172,7 @@ export default function DiagnosisPage() {
             </select>
             <p className="mt-1 text-xs text-slate-500">
               한도를 계산하지 않고 상한 요건 해당 여부만 확인합니다. 모르면 &apos;모름&apos;을 고르세요.
+              {needsSpouseIncome(applicant) ? ' 배우자 소득을 합산해 신고하세요.' : ' 미혼은 본인 소득만 신고하면 됩니다.'}
             </p>
           </Row>
 
@@ -179,9 +185,13 @@ export default function DiagnosisPage() {
             </select>
           </Row>
 
-          <Row label="기존 전세대출·전세보증 이용 중">
-            <Toggle value={applicant.hasExistingJeonseLoan}
-              onChange={(v) => set('hasExistingJeonseLoan', v)} yes="있음" no="없음" />
+          <Row label="기존 전세자금대출 보유">
+            <select className="inp" value={applicant.existingJeonseLoan}
+              onChange={(e) => set('existingJeonseLoan', e.target.value as Applicant['existingJeonseLoan'])}>
+              <option value="NONE">없음</option>
+              <option value="HAS_ONE">1건</option>
+              <option value="HAS_MULTIPLE">2건 이상</option>
+            </select>
           </Row>
 
           <Nav onNext={() => next(() => validateApplicant(applicant), 1)} />
@@ -255,9 +265,14 @@ export default function DiagnosisPage() {
               <p className="font-semibold">{property.address}</p>
               <p className="mt-1">
                 지역: {property.region === 'CAPITAL' ? '수도권' : '비수도권'}
-                {property.housingType && ` · 유형: ${property.housingType.value}`}
+                {property.propertyTypeLabel && ` · 유형: ${property.propertyTypeLabel}`}
                 {property.buildingUse && ` · 용도: ${property.buildingUse.value}`}
               </p>
+              {property.fetchedAt && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  건축물대장 조회 {new Date(property.fetchedAt).toLocaleString('ko-KR')} · 월간 갱신 데이터라 최신 발급본과 다를 수 있습니다.
+                </p>
+              )}
             </div>
           )}
 

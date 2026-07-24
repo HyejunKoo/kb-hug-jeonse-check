@@ -18,7 +18,7 @@ export async function searchAddress(address: string): Promise<AddressSearchResul
 
 export interface BuildingResult {
   property: Property | null;
-  housing?: { type: string; label: string; basis: string };
+  housing?: { code: string; label: string; isMultiFamily: boolean; basis: string };
   notes: string[];
 }
 

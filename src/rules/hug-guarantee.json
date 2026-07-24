@@ -1,0 +1,6 @@
+{
+  "version": "0.1.0",
+  "updatedAt": "2026-07-24",
+  "_comment": "3번 담당: HUG 보증요건 전용 규칙팩. 현재 규칙은 kb-hug.json에 layer='GUARANTEE'로 함께 들어 있다. 분리 작업 시 여기로 옮기고 rule-provider.ts에서 두 팩을 합치도록 수정할 것.",
+  "rules": []
+}
