@@ -1,15 +1,20 @@
 'use client';
-// src/app/diagnosis/page.tsx — 진단 플로우 (1번: 입력 / 결과 표시는 후속 에이전트)
-// MVP: 결과는 이 페이지 안에서 인라인 표시. /diagnosis/result 분리는 저장 기능 이후.
+// src/app/diagnosis/page.tsx — 진단 플로우
+// 1 신청인 → 2 예정계약 → 3 매물·등기 → 4 결과
 import { useState } from 'react';
 import type {
   Applicant, PlannedContract, Property, RegistryInfo, PathResult,
 } from '@/types';
-import { DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract } from '@/features/intake/schema';
+import {
+  DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract,
+} from '@/features/intake/schema';
 import { toDiagnosisCase } from '@/features/intake/mapper';
-import { fetchBuildingInfo } from '@/features/building/client';
+import { searchAddress, fetchBuildingInfo } from '@/features/building/client';
+import type { JusoItem } from '@/features/building/mapper';
 import { Row, Toggle, Nav } from '@/features/intake/components/fields';
 import { ResultCard } from '@/features/result/components/ResultCard';
+
+const STEPS = ['신청인', '예정 계약', '매물·등기', '결과'];
 
 export default function DiagnosisPage() {
   const [step, setStep] = useState(0);
@@ -23,11 +28,33 @@ export default function DiagnosisPage() {
   const [result, setResult] = useState<PathResult | null>(null);
   const [report, setReport] = useState('');
 
-  async function onFetchBuilding() {
-    setLoading(true);
+  // 주소 검색 상태
+  const [query, setQuery] = useState('');
+  const [candidates, setCandidates] = useState<JusoItem[]>([]);
+  const [selected, setSelected] = useState<JusoItem | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  const set = <K extends keyof Applicant>(k: K, v: Applicant[K]) =>
+    setApplicant({ ...applicant, [k]: v });
+  const setC = <K extends keyof PlannedContract>(k: K, v: PlannedContract[K]) =>
+    setContract({ ...contract, [k]: v });
+
+  async function onSearch() {
+    if (!query.trim()) return;
+    setLoading(true); setSearched(true); setSelected(null); setProperty({ address: '' });
     try {
-      const p = await fetchBuildingInfo(property.address);
-      if (p) setProperty(p);
+      const { candidates: list, notes: n } = await searchAddress(query);
+      setCandidates(list); setNotes(n);
+    } finally { setLoading(false); }
+  }
+
+  async function onSelect(j: JusoItem) {
+    setSelected(j); setLoading(true);
+    try {
+      const r = await fetchBuildingInfo(j);
+      if (r.property) setProperty(r.property);
+      setNotes(r.notes);
     } finally { setLoading(false); }
   }
 
@@ -35,20 +62,19 @@ export default function DiagnosisPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/ocr', { method: 'POST' });
-      const data = await res.json();
-      setRegistry(data.registry);
+      setRegistry((await res.json()).registry);
     } finally { setLoading(false); }
   }
 
   async function onRunCheck() {
-    setLoading(true);
+    if (!property.address) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
+    setErrors([]); setLoading(true);
     try {
       const res = await fetch('/api/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(toDiagnosisCase(applicant, contract, property, registry)),
       });
-      const data = await res.json();
-      setResult(data.pathResult);
+      setResult((await res.json()).pathResult);
       setStep(3);
     } finally { setLoading(false); }
   }
@@ -61,15 +87,14 @@ export default function DiagnosisPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pathResult: result }),
       });
-      const data = await res.json();
-      setReport(data.report ?? '');
+      setReport((await res.json()).report ?? '');
     } finally { setLoading(false); }
   }
 
-  function next(validate?: () => string[], to?: number) {
-    const errs = validate ? validate() : [];
+  function next(validate: () => string[], to: number) {
+    const errs = validate();
     setErrors(errs);
-    if (errs.length === 0 && to !== undefined) setStep(to);
+    if (errs.length === 0) setStep(to);
   }
 
   return (
@@ -83,7 +108,7 @@ export default function DiagnosisPage() {
       </header>
 
       <nav className="mb-6 flex gap-2 text-xs">
-        {['신청인', '예정 계약', '매물·등기', '결과'].map((t, i) => (
+        {STEPS.map((t, i) => (
           <span key={t} className={`rounded-full border px-3 py-1 ${step === i ? 'border-yellow-500 bg-yellow-50 font-semibold' : 'border-slate-200 text-slate-400'}`}>
             {i + 1}. {t}
           </span>
@@ -92,101 +117,195 @@ export default function DiagnosisPage() {
 
       {errors.length > 0 && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {errors.map(e => <p key={e}>{e}</p>)}
+          {errors.map((e) => <p key={e}>{e}</p>)}
         </div>
       )}
 
+      {/* ---------- 1. 신청인 ---------- */}
       {step === 0 && (
         <section className="space-y-4 rounded-xl border p-5">
           <Row label="연령 (만)">
             <input type="number" className="inp" value={applicant.age}
-              onChange={e => setApplicant({ ...applicant, age: Number(e.target.value) })} />
+              onChange={(e) => set('age', Number(e.target.value))} />
           </Row>
+
           <Row label="세대주 여부">
-            <Toggle value={applicant.isHouseholder} onChange={v => setApplicant({ ...applicant, isHouseholder: v })} yes="세대주" no="아님" />
+            <Toggle value={applicant.isHouseholder} onChange={(v) => set('isHouseholder', v)} yes="세대주" no="아님" />
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              주민등록등본 맨 위에 나오는 사람이 세대주입니다. 혼자 전입신고를 했다면 보통 세대주,
+              부모님 주소에 함께 등록돼 있다면 세대원이에요. 정부24에서 등본을 떼면 확인할 수 있습니다.
+            </p>
           </Row>
+
           <Row label="주택 보유">
             <select className="inp" value={applicant.homeCount}
-              onChange={e => setApplicant({ ...applicant, homeCount: Number(e.target.value) as 0 | 1 | 2 })}>
+              onChange={(e) => set('homeCount', Number(e.target.value) as 0 | 1 | 2)}>
               <option value={0}>0채 (무주택)</option>
               <option value={1}>1채</option>
               <option value={2}>2채 이상</option>
             </select>
           </Row>
-          <Row label="부부합산 연소득">
+
+          <Row label="혼인 상태">
+            <select className="inp" value={applicant.maritalStatus}
+              onChange={(e) => set('maritalStatus', e.target.value as Applicant['maritalStatus'])}>
+              <option value="SINGLE">미혼</option>
+              <option value="MARRIED">기혼</option>
+              <option value="ENGAGED">결혼 예정</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">소득·주택 보유를 배우자와 합산할지 결정하는 데 씁니다.</p>
+          </Row>
+
+          <Row label={applicant.maritalStatus === 'SINGLE' ? '연소득' : '부부합산 연소득'}>
             <select className="inp" value={applicant.incomeBand}
-              onChange={e => setApplicant({ ...applicant, incomeBand: e.target.value as Applicant['incomeBand'] })}>
+              onChange={(e) => set('incomeBand', e.target.value as Applicant['incomeBand'])}>
               <option value="UNDER_50M">5천만원 이하</option>
               <option value="B50_60M">5천~6천만원</option>
               <option value="B60_70M">6천~7천만원</option>
               <option value="OVER_70M">7천만원 초과</option>
               <option value="UNKNOWN">모름</option>
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              한도를 계산하지 않고 상한 요건 해당 여부만 확인합니다. 모르면 &apos;모름&apos;을 고르세요.
+            </p>
           </Row>
+
+          <Row label="소득 유형">
+            <select className="inp" value={applicant.incomeType}
+              onChange={(e) => set('incomeType', e.target.value as Applicant['incomeType'])}>
+              <option value="EMPLOYED">근로소득</option>
+              <option value="SELF_EMPLOYED">사업소득</option>
+              <option value="NO_INCOME">무소득</option>
+            </select>
+          </Row>
+
+          <Row label="기존 전세대출·전세보증 이용 중">
+            <Toggle value={applicant.hasExistingJeonseLoan}
+              onChange={(v) => set('hasExistingJeonseLoan', v)} yes="있음" no="없음" />
+          </Row>
+
           <Nav onNext={() => next(() => validateApplicant(applicant), 1)} />
         </section>
       )}
 
+      {/* ---------- 2. 예정 계약 ---------- */}
       {step === 1 && (
         <section className="space-y-4 rounded-xl border p-5">
           <Row label="예정 보증금 (원)">
             <input type="number" className="inp" value={contract.deposit}
-              onChange={e => setContract({ ...contract, deposit: Number(e.target.value) })} />
+              onChange={(e) => setC('deposit', Number(e.target.value))} />
+            <p className="mt-1 text-xs text-slate-500">
+              {contract.deposit > 0 ? `${(contract.deposit / 100000000).toFixed(2)}억원` : ''}
+            </p>
           </Row>
+
           <Row label="계약기간 (개월)">
             <input type="number" className="inp" value={contract.termMonths}
-              onChange={e => setContract({ ...contract, termMonths: Number(e.target.value) })} />
+              onChange={(e) => setC('termMonths', Number(e.target.value))} />
           </Row>
+
+          <Row label="입주 예정일">
+            <input type="date" className="inp" value={contract.moveInDate}
+              onChange={(e) => setC('moveInDate', e.target.value)} />
+          </Row>
+
           <Row label="공인중개사 중개">
-            <Toggle value={contract.brokered} onChange={v => setContract({ ...contract, brokered: v })} yes="중개" no="직거래" />
+            <Toggle value={contract.brokered} onChange={(v) => setC('brokered', v)} yes="중개" no="직거래" />
           </Row>
+
           <Nav onPrev={() => setStep(0)} onNext={() => next(() => validateContract(contract), 2)} />
         </section>
       )}
 
+      {/* ---------- 3. 매물·등기 ---------- */}
       {step === 2 && (
         <section className="space-y-4 rounded-xl border p-5">
-          <Row label="매물 주소">
+          <Row label="계약하려는 집 주소">
             <div className="flex gap-2">
-              <input className="inp flex-1" placeholder="도로명 주소 입력" value={property.address}
-                onChange={e => setProperty({ ...property, address: e.target.value })} />
-              <button className="btn-sub" onClick={onFetchBuilding} disabled={loading}>건축물대장 조회</button>
+              <input className="inp flex-1" placeholder="예: 마포구 월드컵로 240" value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSearch(); }} />
+              <button className="btn-sub whitespace-nowrap" onClick={onSearch} disabled={loading}>
+                {loading ? '검색 중…' : '주소 검색'}
+              </button>
             </div>
+            <p className="mt-1 text-xs text-slate-500">지금 사는 집이 아니라 계약하려는 매물 주소예요. 도로명 주소로 검색하세요.</p>
           </Row>
-          {property.region && (
-            <p className="text-xs text-slate-500">지역 구분: {property.region === 'CAPITAL' ? '수도권' : '비수도권'} (주소 파싱)</p>
+
+          {searched && candidates.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs text-slate-500">검색 결과 {candidates.length}건 — 하나를 고르세요</p>
+              <div className="space-y-1.5">
+                {candidates.map((j) => {
+                  const on = selected?.bdMgtSn === j.bdMgtSn;
+                  return (
+                    <button key={j.bdMgtSn} onClick={() => onSelect(j)}
+                      className={`block w-full rounded-lg border p-3 text-left text-sm ${on ? 'border-yellow-500 bg-yellow-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                      <span className="font-medium">{j.roadAddr}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{j.jibunAddr}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
+
+          {property.address && (
+            <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              <p className="font-semibold">{property.address}</p>
+              <p className="mt-1">
+                지역: {property.region === 'CAPITAL' ? '수도권' : '비수도권'}
+                {property.housingType && ` · 유형: ${property.housingType.value}`}
+                {property.buildingUse && ` · 용도: ${property.buildingUse.value}`}
+              </p>
+            </div>
+          )}
+
+          {notes.length > 0 && (
+            <ul className="space-y-1 text-xs text-amber-700">
+              {notes.map((n) => <li key={n}>· {n}</li>)}
+            </ul>
+          )}
+
           <Row label="등기부 (샘플)">
             <button className="btn-sub" onClick={onFetchOcrSample} disabled={loading}>샘플 등기부 불러오기</button>
           </Row>
           {registry && (
             <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
               <p className="mb-1 font-semibold">추출 결과 — 판정 전 반드시 확인·수정하세요</p>
-              <p>소유자: {registry.ownerName?.value} · 근저당 합계: {(Number(registry.seniorLienTotal?.value) / 100000000).toFixed(1)}억
-                 · 권리침해: {registry.hasRightsViolation?.value ? '있음' : '없음'}</p>
+              <p>
+                소유자: {registry.ownerName?.value} · 근저당 합계:{' '}
+                {(Number(registry.seniorLienTotal?.value) / 100000000).toFixed(1)}억 · 권리침해:{' '}
+                {registry.hasRightsViolation?.value ? '있음' : '없음'}
+              </p>
             </div>
           )}
+
           <Nav onPrev={() => setStep(1)} onNext={onRunCheck} nextLabel={loading ? '판정 중…' : '사전점검 실행'} />
         </section>
       )}
 
+      {/* ---------- 4. 결과 ---------- */}
       {step === 3 && result && (
         <section className="space-y-4">
           <div className="rounded-xl border p-5">
             <h2 className="font-bold">{result.pathLabel}</h2>
             <p className="mt-1 text-sm">
-              막힌 단계: <b>{result.blockedAt === 'NONE' ? '없음' : result.blockedAt === 'PRODUCT' ? '상품요건 (1층)' : '보증요건 (2층)'}</b>
+              막힌 단계:{' '}
+              <b className={result.blockedAt === 'NONE' ? '' : 'text-red-600'}>
+                {result.blockedAt === 'NONE' ? '없음' : result.blockedAt === 'PRODUCT' ? '상품요건 (1층)' : '보증요건 (2층)'}
+              </b>
               <span className="ml-2 text-slate-500">· 공식 심사 필요 {result.officialReviewCount}건</span>
             </p>
           </div>
 
-          {(['PRODUCT', 'GUARANTEE'] as const).map(layer => (
+          {(['PRODUCT', 'GUARANTEE'] as const).map((layer) => (
             <div key={layer}>
               <h3 className="mb-2 text-sm font-semibold text-slate-500">
                 {layer === 'PRODUCT' ? '1층 · KB 상품요건' : '2층 · HUG 보증요건'}
               </h3>
               <div className="space-y-2">
-                {result.results.filter(r => r.layer === layer).map(r => <ResultCard key={r.ruleId} r={r} />)}
+                {result.results.filter((r) => r.layer === layer).map((r) => <ResultCard key={r.ruleId} r={r} />)}
               </div>
             </div>
           ))}

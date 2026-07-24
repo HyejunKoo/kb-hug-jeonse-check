@@ -25,6 +25,9 @@ export interface JusoItem {
   mtYn: string;         // '1' = 산번지
   bdKdcd: string;       // '0' 일반건물 / '1' 공동주택
   bdNm: string;
+  udrtYn?: string;      // '1' = 지하. 전세 매물 대상 아님
+  bdMgtSn?: string;     // 건물관리번호 (목록 key)
+  zipNo?: string;
 }
 
 export interface LotCode {
