@@ -1,0 +1,16 @@
+{
+  "_note": "주소검색 API 실응답 (TESTJUSOGOKR 테스트키). 실제 검색이 아니라 고정 샘플이 반환됨.",
+  "results": {
+    "common": { "countPerPage": "10", "errorMessage": "정상", "errorCode": "0", "totalCount": "5", "currentPage": "1" },
+    "juso": [
+      {
+        "siNm": "서울특별시", "sggNm": "서초구", "emdNm": "양재동",
+        "roadAddr": "서울특별시 서초구 강남대로12길 11 (양재동, 현대아트빌라)",
+        "jibunAddr": "서울특별시 서초구 양재동 317-5 현대아트빌라",
+        "admCd": "1165010200", "lnbrMnnm": "317", "lnbrSlno": "5",
+        "mtYn": "0", "bdKdcd": "1", "bdNm": "현대아트빌라", "zipNo": "06779",
+        "bdMgtSn": "1165010200103170005003528", "detBdNmList": ""
+      }
+    ]
+  }
+}

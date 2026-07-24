@@ -124,9 +124,9 @@ const checkNotIllegalBuilding: Checker = (c) => {
   if (f === undefined) {
     return {
       verdict: 'MISSING_INFORMATION',
-      reason: '건축물대장 조회 결과 없음 — 위반건축물 여부 판정 불가',
+      reason: '위반건축물 표시는 건축HUB 공개 API에 제공되지 않아 판정 불가',
       usedValues: [],
-      nextAction: '주소 확인 후 건축물대장 조회를 다시 시도하세요.',
+      nextAction: '정부24 또는 세움터에서 건축물대장을 열람해 상단의 위반건축물 표시 여부를 확인하세요.',
     };
   }
   const ok = f.value === false;
@@ -176,6 +176,33 @@ const checkSeniorLienRatio: Checker = (c) => {
   };
 };
 
+/** 다가구 여부에 따른 선순위 임차보증금 경고 (HUG 담보인정 다가구 80% / 그 외 90%) */
+const checkMultiFamilyRisk: Checker = (c) => {
+  const t = c.property.housingType?.value;
+  if (!t) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '주택 유형 미확인 — 담보인정비율 기준(다가구 80% / 그 외 90%)을 특정할 수 없음',
+      usedValues: [],
+      nextAction: '주소를 확인해 건축물대장 조회를 다시 시도하세요.',
+    };
+  }
+  if (t.includes('다가구')) {
+    return {
+      verdict: 'OFFICIAL_REVIEW_REQUIRED',
+      reason: '다가구주택 — 다른 임차인의 선순위 보증금 총액이 담보인정 한도에 포함되나 계약 전 확인 불가',
+      usedValues: [`주택 유형 ${t} (건축HUB)`],
+      nextAction: '임대인에게 선순위 임차보증금 총액 확인서를 요청하고, KB 상담 시 함께 제시하세요.',
+    };
+  }
+  return {
+    verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+    reason: `${t} — 호별 개별 등기로 선순위 임차보증금 합산 대상 아님`,
+    usedValues: [`주택 유형 ${t} (건축HUB)`],
+    nextAction: '',
+  };
+};
+
 // ---------- 고정 판정 ----------
 
 const alwaysPostContract: Checker = () => ({
@@ -203,6 +230,7 @@ export const CHECKERS: Record<string, Checker> = {
   checkTermMin,
   checkDepositCap,
   checkNotIllegalBuilding,
+  checkMultiFamilyRisk,
   checkNoRightsViolation,
   checkSeniorLienRatio,
   alwaysPostContract,

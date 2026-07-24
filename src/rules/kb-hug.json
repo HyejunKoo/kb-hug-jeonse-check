@@ -9,7 +9,10 @@
       "path": "KB_STAR_HUG",
       "label": "신청인 연령 요건",
       "checkId": "checkAge",
-      "params": { "min": 19, "max": 34 },
+      "params": {
+        "min": 19,
+        "max": 34
+      },
       "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
       "effectiveFrom": "2026-07-01"
     },
@@ -28,7 +31,9 @@
       "path": "KB_STAR_HUG",
       "label": "주택보유 요건 (1주택 이내)",
       "checkId": "checkHomeCount",
-      "params": { "maxHomes": 1 },
+      "params": {
+        "maxHomes": 1
+      },
       "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
       "effectiveFrom": "2026-07-01"
     },
@@ -38,7 +43,9 @@
       "path": "KB_STAR_HUG",
       "label": "소득 상한 요건",
       "checkId": "checkIncomeCap",
-      "params": { "capBand": "UNDER_50M" },
+      "params": {
+        "capBand": "UNDER_50M"
+      },
       "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
       "effectiveFrom": "2026-07-01"
     },
@@ -66,7 +73,9 @@
       "path": "KB_STAR_HUG",
       "label": "계약기간 1년 이상",
       "checkId": "checkTermMin",
-      "params": { "minMonths": 12 },
+      "params": {
+        "minMonths": 12
+      },
       "sourceUrl": "https://www.khug.or.kr",
       "effectiveFrom": "2026-07-01"
     },
@@ -76,7 +85,10 @@
       "path": "KB_STAR_HUG",
       "label": "보증금 한도 (수도권 7억 / 비수도권 5억)",
       "checkId": "checkDepositCap",
-      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "params": {
+        "capitalCap": 700000000,
+        "nonCapitalCap": 500000000
+      },
       "sourceUrl": "https://www.khug.or.kr",
       "effectiveFrom": "2026-07-01"
     },
@@ -104,7 +116,18 @@
       "path": "KB_STAR_HUG",
       "label": "선순위채권 비율 요건",
       "checkId": "checkSeniorLienRatio",
-      "params": { "maxRatioOfPrice": 0.6 },
+      "params": {
+        "maxRatioOfPrice": 0.6
+      },
+      "sourceUrl": "https://www.khug.or.kr",
+      "effectiveFrom": "2026-07-01"
+    },
+    {
+      "ruleId": "HUG-HOUSING-TYPE",
+      "layer": "GUARANTEE",
+      "path": "KB_STAR_HUG",
+      "label": "주택 유형별 담보인정 기준 (다가구 선순위 임차보증금)",
+      "checkId": "checkMultiFamilyRisk",
       "sourceUrl": "https://www.khug.or.kr",
       "effectiveFrom": "2026-07-01"
     },

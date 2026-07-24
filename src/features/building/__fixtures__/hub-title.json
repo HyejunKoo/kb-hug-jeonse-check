@@ -1,0 +1,30 @@
+{
+  "_note": "건축HUB 표제부(getBrTitleInfo) 실응답. 서초구 양재동 317-5. 위반건축물 필드는 존재하지 않음.",
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE" },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "rnum": 1,
+            "platPlc": "서울특별시 서초구 양재동 317-5번지",
+            "sigunguCd": "11650", "bjdongCd": "10200", "platGbCd": "0", "bun": "0317", "ji": "0005",
+            "mgmBldrgstPk": 1023110301,
+            "regstrGbCd": "2", "regstrGbCdNm": "집합",
+            "regstrKindCd": "3", "regstrKindCdNm": "표제부",
+            "newPlatPlc": "서울특별시 서초구 강남대로12길 11 (양재동)",
+            "bldNm": " ", "dongNm": " ",
+            "mainAtchGbCd": "0", "mainAtchGbCdNm": "주건축물",
+            "platArea": 420.3, "archArea": 220.65, "bcRat": 52.5, "totArea": 1137.07, "vlRat": 192.7,
+            "strctCdNm": "철근콘크리트구조",
+            "mainPurpsCd": "02000", "mainPurpsCdNm": "공동주택", "etcPurps": "공동주택",
+            "hhldCnt": 18, "fmlyCnt": 0, "hoCnt": 0,
+            "heit": 12.6, "grndFlrCnt": 4, "ugrndFlrCnt": 1,
+            "useAprDay": "19961212", "crtnDay": "20220813"
+          }
+        ]
+      },
+      "numOfRows": "10", "pageNo": "1", "totalCount": "1"
+    }
+  }
+}
