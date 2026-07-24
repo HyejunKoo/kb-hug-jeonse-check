@@ -1,0 +1,255 @@
+// ============================================================
+// lib/ruleEngine.ts — 규칙엔진 (순수 함수만)
+// 절대 규칙: 판정은 여기서만 한다. LLM에게 판정 시키지 않는다.
+// 동일 입력 + 동일 규칙팩 버전 → 항상 동일 결과 (결정론)
+// ============================================================
+import type {
+  DiagnosisCase, Rule, RulePack, CheckResult, PathResult, Verdict,
+} from './types';
+
+const won = (n: number) => `${(n / 100000000).toFixed(1)}억원`;
+
+/** 개별 체크 함수의 반환: verdict + 사람이 읽는 근거 */
+interface CheckOutcome {
+  verdict: Verdict;
+  reason: string;
+  usedValues: string[];
+  nextAction: string;
+}
+
+type Checker = (c: DiagnosisCase, params: Rule['params']) => CheckOutcome;
+
+// ---------- 1층: KB 상품요건 체크 ----------
+
+const checkAge: Checker = (c, p) => {
+  const min = Number(p?.min ?? 19), max = Number(p?.max ?? 34);
+  const age = c.applicant.age;
+  const ok = age >= min && age <= max;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: `신고 연령 ${age}세 — 요건 만 ${min}~${max}세`,
+    usedValues: [`연령 ${age}세 (자기신고)`],
+    nextAction: ok ? '' : '연령 요건이 다른 KB 상품을 확인하세요.',
+  };
+};
+
+const checkHouseholder: Checker = (c) => {
+  const ok = c.applicant.isHouseholder;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok ? '세대주로 신고됨' : '세대주 아님으로 신고됨 — 세대주(예정자 포함) 요건 확인 필요',
+    usedValues: [`세대주 여부: ${ok ? '예' : '아니오'} (자기신고)`],
+    nextAction: ok ? '' : '전입·세대분리로 세대주 예정자에 해당하는지 KB 상담 시 확인하세요.',
+  };
+};
+
+const checkHomeCount: Checker = (c, p) => {
+  const max = Number(p?.maxHomes ?? 1);
+  const n = c.applicant.homeCount;
+  const ok = n <= max;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: `신고 주택보유 ${n === 2 ? '2채 이상' : `${n}채`} — 요건 ${max}주택 이내 (KB 상품 기준. HUG 보증은 무주택 요건일 수 있음)`,
+    usedValues: [`주택보유 ${n === 2 ? '2채 이상' : `${n}채`} (자기신고)`],
+    nextAction: ok ? '' : '보유 주택 처분 계획이 있다면 KB 상담 시 함께 문의하세요.',
+  };
+};
+
+const checkIncomeCap: Checker = (c, p) => {
+  const band = c.applicant.incomeBand;
+  if (band === 'UNKNOWN') {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '부부합산 연소득을 "모름"으로 선택 — 소득 상한 요건 판정 불가',
+      usedValues: ['소득구간: 모름 (자기신고)'],
+      nextAction: '원천징수영수증·소득금액증명으로 부부합산 소득을 확인 후 다시 진단하세요.',
+    };
+  }
+  // capBand 이하 구간만 충족으로 본다 (예시: UNDER_50M)
+  const order = ['UNDER_50M', 'B50_60M', 'B60_70M', 'OVER_70M'];
+  const cap = String(p?.capBand ?? 'UNDER_50M');
+  const ok = order.indexOf(band) <= order.indexOf(cap);
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: `신고 소득구간 기준 상한 요건 ${ok ? '이내' : '초과'} (한도 계산 아님, O/X 판정)`,
+    usedValues: [`소득구간 ${band} (자기신고)`],
+    nextAction: ok ? '' : '소득 상한이 다른 상품(예: 청년 맞춤형 7천)을 확인하세요.',
+  };
+};
+
+const checkBrokered: Checker = (c) => {
+  const ok = c.contract.brokered;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok ? '공인중개사 중개 계약 예정' : '직거래로 신고됨 — 중개 계약 요건과 충돌',
+    usedValues: [`중개 여부: ${ok ? '중개' : '직거래'} (자기신고)`],
+    nextAction: ok ? '' : '직거래 시 취급 가능 여부를 KB에 확인하거나 중개 계약을 검토하세요.',
+  };
+};
+
+// ---------- 2층: HUG 보증요건 체크 ----------
+
+const checkTermMin: Checker = (c, p) => {
+  const min = Number(p?.minMonths ?? 12);
+  const t = c.contract.termMonths;
+  const ok = t >= min;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: `계약기간 ${t}개월 — 요건 ${min}개월 이상`,
+    usedValues: [`계약기간 ${t}개월 (자기신고)`],
+    nextAction: ok ? '' : '계약기간을 1년 이상으로 조정 가능한지 임대인과 협의하세요.',
+  };
+};
+
+const checkDepositCap: Checker = (c, p) => {
+  const region = c.property.region;
+  if (!region) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '주소에서 수도권/비수도권을 판별하지 못함',
+      usedValues: [`주소 ${c.property.address || '(미입력)'}`],
+      nextAction: '도로명 주소를 정확히 입력해 주세요.',
+    };
+  }
+  const cap = region === 'CAPITAL' ? Number(p?.capitalCap) : Number(p?.nonCapitalCap);
+  const ok = c.contract.deposit <= cap;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: `보증금 ${won(c.contract.deposit)} — ${region === 'CAPITAL' ? '수도권' : '비수도권'} 한도 ${won(cap)}`,
+    usedValues: [`보증금 ${won(c.contract.deposit)} (자기신고)`, `지역 구분 (주소 파싱)`],
+    nextAction: ok ? '' : '보증금이 한도를 초과합니다. 다른 매물 또는 다른 경로를 검토하세요.',
+  };
+};
+
+const checkNotIllegalBuilding: Checker = (c) => {
+  const f = c.property.isIllegalBuilding;
+  if (f === undefined) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '건축물대장 조회 결과 없음 — 위반건축물 여부 판정 불가',
+      usedValues: [],
+      nextAction: '주소 확인 후 건축물대장 조회를 다시 시도하세요.',
+    };
+  }
+  const ok = f.value === false;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok ? '건축물대장상 위반건축물 표시 없음' : '건축물대장에 위반건축물 표시 있음',
+    usedValues: [`위반건축물 여부 (건축HUB API)`],
+    nextAction: ok ? '' : '위반건축물은 HUG 보증이 어렵습니다. 계약 보류를 권고합니다.',
+  };
+};
+
+const checkNoRightsViolation: Checker = (c) => {
+  const f = c.registry?.hasRightsViolation;
+  if (f === undefined) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '등기사항전부증명서 미제출 — 권리침해 여부 판정 불가',
+      usedValues: [],
+      nextAction: '등기부를 발급받아 업로드하고 추출 결과를 확인해 주세요.',
+    };
+  }
+  const ok = f.value === false;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok ? '확인된 압류·가압류·경매·가처분·가등기 없음' : '등기부상 권리침해 기재 확인됨',
+    usedValues: ['권리침해 여부 (고객확인문서)'],
+    nextAction: ok ? '' : '권리침해가 있는 매물은 보증이 어렵습니다. 계약 보류를 권고합니다.',
+  };
+};
+
+const checkSeniorLienRatio: Checker = (c) => {
+  const lien = c.registry?.seniorLienTotal;
+  if (lien === undefined) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '선순위채권(근저당 설정액) 정보 없음',
+      usedValues: [],
+      nextAction: '등기부를 업로드해 근저당 설정액을 확인해 주세요.',
+    };
+  }
+  // 비율 계산에는 공식 시세 기반 주택가격이 필요 → 계약 전 확보 불가
+  return {
+    verdict: 'OFFICIAL_REVIEW_REQUIRED',
+    reason: `선순위채권 ${won(lien.value)} 확인됨. 비율 판정에는 공식 시세 기반 주택가격이 필요 — 공개정보로 판단 불가`,
+    usedValues: [`선순위채권 ${won(lien.value)} (고객확인문서)`],
+    nextAction: 'KB 상담 시 주택가격 산정 기준과 선순위 비율 충족 여부를 문의하세요.',
+  };
+};
+
+// ---------- 고정 판정 ----------
+
+const alwaysPostContract: Checker = () => ({
+  verdict: 'POST_CONTRACT_REQUIREMENT',
+  reason: '계약 체결 및 계약금 지급 후에 충족되는 요건',
+  usedValues: [],
+  nextAction: '계약 시 계약금 지급 증빙(이체확인증 등)을 보관하세요.',
+});
+
+const alwaysOfficialReview: Checker = () => ({
+  verdict: 'OFFICIAL_REVIEW_REQUIRED',
+  reason: '기관 내부정보 또는 공식 시세가 필요해 공개정보로 판단 불가',
+  usedValues: [],
+  nextAction: 'KB·보증기관 공식 심사에서 확인됩니다.',
+});
+
+// ---------- 레지스트리 ----------
+
+const CHECKERS: Record<string, Checker> = {
+  checkAge,
+  checkHouseholder,
+  checkHomeCount,
+  checkIncomeCap,
+  checkBrokered,
+  checkTermMin,
+  checkDepositCap,
+  checkNotIllegalBuilding,
+  checkNoRightsViolation,
+  checkSeniorLienRatio,
+  alwaysPostContract,
+  alwaysOfficialReview,
+};
+
+// ---------- 엔진 본체 ----------
+
+export function runRulePack(diag: DiagnosisCase, pack: RulePack): PathResult {
+  const results: CheckResult[] = pack.rules.map((rule) => {
+    const checker = CHECKERS[rule.checkId];
+    if (!checker) {
+      return {
+        ruleId: rule.ruleId, layer: rule.layer, label: rule.label,
+        verdict: 'MISSING_INFORMATION',
+        reason: `checkId '${rule.checkId}' 미구현 — 규칙팩과 엔진 버전 불일치`,
+        usedValues: [], sourceUrl: rule.sourceUrl,
+        effectiveFrom: rule.effectiveFrom, nextAction: '',
+      };
+    }
+    const out = checker(diag, rule.params);
+    return {
+      ruleId: rule.ruleId, layer: rule.layer, label: rule.label,
+      verdict: out.verdict, reason: out.reason, usedValues: out.usedValues,
+      sourceUrl: rule.sourceUrl, effectiveFrom: rule.effectiveFrom,
+      nextAction: out.nextAction,
+    };
+  });
+
+  const unmetProduct = results.some(r => r.layer === 'PRODUCT' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
+  const unmetGuarantee = results.some(r => r.layer === 'GUARANTEE' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
+  const blockedAt = unmetProduct ? 'PRODUCT' : unmetGuarantee ? 'GUARANTEE' : 'NONE';
+
+  return {
+    path: 'KB_STAR_HUG',
+    pathLabel: 'KB스타 전세자금대출 (HUG)',
+    blockedAt,
+    results,
+    officialReviewCount: results.filter(r => r.verdict === 'OFFICIAL_REVIEW_REQUIRED').length,
+  };
+}
+
+/** 주소 문자열에서 수도권/비수도권 파싱 (F02) */
+export function parseRegion(address: string): 'CAPITAL' | 'NON_CAPITAL' | undefined {
+  if (!address.trim()) return undefined;
+  const capital = ['서울', '경기', '인천'];
+  return capital.some(k => address.includes(k)) ? 'CAPITAL' : 'NON_CAPITAL';
+}
