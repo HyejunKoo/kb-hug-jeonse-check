@@ -47,13 +47,13 @@ supabase/schema.sql       DB 스키마 (Supabase SQL Editor에서 실행)
 ```bash
 git add -A && git commit -m "작업 내용"
 rm -rf node_modules .next
-zip -r jeonse-copilot.zip . -x "*.env*"
+zip -r kb-jeonse-check.zip . -x "*.env*"
 ```
 
 zip을 노션에 업로드 → 개인 노트북에서 다운로드 후:
 
 ```bash
-unzip jeonse-copilot.zip -d jeonse-copilot && cd jeonse-copilot
+unzip kb-jeonse-check.zip -d kb-jeonse-check && cd kb-jeonse-check
 npm install
 npm run dev        # 동작 확인
 git push origin main   # (.git 폴더가 zip에 포함되어 히스토리 유지됨)
