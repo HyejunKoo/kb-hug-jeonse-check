@@ -119,14 +119,29 @@ export function resolveHousingType(t: HubTitleItem): { type: HousingType; label:
   return { type: 'NON_RESIDENTIAL', label: `주택 외 용도(${purpose})`, basis: `주용도 ${purpose}` };
 }
 
+/**
+ * 대장 종류 표기가 대장구분에 따라 다르다 (2026-07 실응답 확인).
+ *   집합대장(다세대·아파트) → '표제부'
+ *   일반대장(단독·다가구)   → '일반건축물'   ← 다가구가 여기 속한다
+ * 둘 다 받아야 단독·다가구가 누락되지 않는다.
+ */
+const TITLE_KINDS = ['표제부', '일반건축물'];
+
 /** 표제부 응답 배열에서 판정 대상 1건 고르기 */
-export function pickTitleItem(items: HubTitleItem[]): { item?: HubTitleItem; ambiguous: boolean } {
-  const main = items.filter(
-    (i) => clean(i.regstrKindCdNm) === '표제부' && clean(i.mainAtchGbCdNm) !== '부속건축물',
-  );
-  if (main.length === 1) return { item: main[0], ambiguous: false };
+export function pickTitleItem(
+  items: HubTitleItem[],
+): { item?: HubTitleItem; ambiguous: boolean; onlyAnnex: boolean } {
+  const kindMatched = items.filter((i) => TITLE_KINDS.includes(clean(i.regstrKindCdNm) ?? ''));
+  // 부속건축물(창고·주차장 등)은 주거 판정 대상이 아니다
+  const main = kindMatched.filter((i) => clean(i.mainAtchGbCdNm) !== '부속건축물');
+
+  if (main.length === 1) return { item: main[0], ambiguous: false, onlyAnnex: false };
+  // 주건축물이 없고 부속건축물만 조회된 경우 (예: 경기장 부속동)
+  if (main.length === 0 && kindMatched.length > 0) {
+    return { item: undefined, ambiguous: false, onlyAnnex: true };
+  }
   // 동이 여러 개인 단지 → 어느 동인지 특정 불가. 추정하지 않고 자료 부족으로 넘긴다.
-  return { item: undefined, ambiguous: main.length > 1 };
+  return { item: undefined, ambiguous: main.length > 1, onlyAnnex: false };
 }
 
 export function hubTitleToProperty(

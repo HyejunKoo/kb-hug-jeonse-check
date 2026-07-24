@@ -1,0 +1,33 @@
+{
+  "_note": "건축HUB 실응답 — 부속건축물만 있는 케이스(마포구 성산동 515, 월드컵경기장). 주거 판정 대상 없음 확인용. 주의: mgmBldrgstPk가 22자리라 JS Number 정밀도를 넘는다. 사용하지 말 것.",
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE" },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "rnum": 1, "platPlc": "서울특별시 마포구 성산동 515번지",
+            "sigunguCd": "11440", "bjdongCd": "12500", "bun": "0515", "ji": "0000",
+            "regstrGbCd": "1", "regstrGbCdNm": "일반",
+            "regstrKindCd": "2", "regstrKindCdNm": "일반건축물",
+            "bldNm": "샤워장", "dongNm": " ",
+            "mainAtchGbCd": "1", "mainAtchGbCdNm": "부속건축물",
+            "mainPurpsCd": "13000", "mainPurpsCdNm": "운동시설", "etcPurps": "운동시설",
+            "hhldCnt": 0, "fmlyCnt": 0, "hoCnt": 0, "totArea": 23.69, "useAprDay": " "
+          },
+          {
+            "rnum": 2, "platPlc": "서울특별시 마포구 성산동 515번지",
+            "sigunguCd": "11440", "bjdongCd": "12500", "bun": "0515", "ji": "0000",
+            "regstrGbCd": "1", "regstrGbCdNm": "일반",
+            "regstrKindCd": "2", "regstrKindCdNm": "일반건축물",
+            "bldNm": "보조경기장 선수대기실동", "dongNm": " ",
+            "mainAtchGbCd": "1", "mainAtchGbCdNm": "부속건축물",
+            "mainPurpsCd": "13000", "mainPurpsCdNm": "운동시설", "etcPurps": " ",
+            "hhldCnt": 0, "fmlyCnt": 0, "hoCnt": 0, "totArea": 111.74, "useAprDay": "20211101"
+          }
+        ]
+      },
+      "numOfRows": "50", "pageNo": "1", "totalCount": "3"
+    }
+  }
+}
