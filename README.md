@@ -12,17 +12,32 @@
 
 ```bash
 npm ci                       # install 말고 ci (lock 고정)
-cp .env.example .env.local   # 키 채우기 — 없어도 동작
+cp .env.example .env.local   # 키는 각자 발급 — 아래 참고
 npm run dev                  # http://localhost:3000
 ```
 
-**키가 하나도 없어도 전체 플로우가 돌아간다.**
+**실제 조회를 하려면 키가 필요하다.** 키가 없어도 앱이 죽지는 않지만, 공공 API 호출이
+저장해둔 샘플 응답(픽스처)으로 대체된다 — 뭘 검색하든 같은 결과가 나온다.
 
-| 없는 키 | 동작 |
+| 없는 키 | 실제로 벌어지는 일 |
 |---|---|
-| `JUSO_API_KEY` / `BUILDING_API_KEY` | 저장해둔 실제 API 응답(픽스처)으로 대체 |
-| `GEMINI_API_KEY` | 결정론적 템플릿 리포트로 폴백 |
+| `JUSO_API_KEY` | 주소 검색이 **항상** `서울 서초구 강남대로12길 11 (양재동)` 1건만 반환. 검색어와 무관 |
+| `BUILDING_API_KEY` | 건축물대장이 **항상** 같은 샘플 건물로 반환 |
+| `GEMINI_API_KEY` | 결정론적 템플릿 리포트로 폴백 (품질만 다름, 내용은 정상) |
 | Supabase 키 | 저장만 생략, 판정은 정상 반환 |
+
+앞의 두 개는 **결과가 틀린다.** 화면에 픽스처라는 표시가 나오지 않으니 주의.
+UI·판정 로직만 건드리는 작업이면 키 없이 개발해도 되지만, 데모·QA 전에는 반드시 발급받을 것.
+
+**공유 계정은 없다. 키는 각자 발급받는다.** 전원 필요한 2개:
+
+| 키 | 발급처 | 소요 |
+|---|---|---|
+| `JUSO_API_KEY` | business.juso.go.kr → 도로명주소 **검색 API** → 개발용 | 즉시 |
+| `BUILDING_API_KEY` | data.go.kr → 건축HUB 건축물대장정보 | 자동승인 |
+
+나머지(Supabase·Gemini)는 담당자만. 발급처와 담당은 [TEAM_GUIDE.md §6](TEAM_GUIDE.md#6-환경변수).
+`.env.local`은 절대 커밋 금지 — 키를 단톡·노션에 평문으로 올리지 말 것.
 
 ```bash
 npm run typecheck   # 커밋 전 (빌드보다 빠름)
