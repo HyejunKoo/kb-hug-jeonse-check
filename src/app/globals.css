@@ -2,14 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  .inp {
-    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-100;
+/* ---------- 디자인 토큰 ---------- */
+:root {
+  --kb-yellow: 255 188 0;   /* KB 옐로우 — 강조에만 제한적으로 사용 */
+  --kb-brown: 96 62 33;     /* 옐로우 위 텍스트 */
+  --ink: 15 23 42;          /* 본문 */
+  --muted: 100 116 139;     /* 보조 텍스트 */
+  --line: 226 232 240;      /* 경계선 */
+  --surface: 248 250 252;   /* 페이지 배경 */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: 'tnum' 0;
   }
+  body {
+    font-family: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+      'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+    word-break: keep-all;
+  }
+  /* 숫자 입력의 스피너 제거 — 금액 입력 가독성 */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  ::selection {
+    background: rgb(var(--kb-yellow) / 0.35);
+  }
+}
+
+@layer components {
+  /* ----- 입력 ----- */
+  .inp {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900
+           shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition
+           placeholder:text-slate-400
+           hover:border-slate-400
+           focus:border-kb-500 focus:ring-4 focus:ring-kb-500/15
+           disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400;
+  }
+  select.inp {
+    @apply cursor-pointer appearance-none pr-10;
+    /* 커스텀 화살표 (arbitrary value가 @apply를 깨뜨려 순수 CSS로 작성) */
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%2364748b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 20px 20px;
+  }
+  input[type='number'].inp,
+  input[type='date'].inp {
+    @apply tabular-nums;
+  }
+
+  /* ----- 버튼 ----- */
   .btn-main {
-    @apply rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-kb-500 px-4 py-2.5
+           text-sm font-bold text-kb-900 shadow-sm transition
+           hover:bg-kb-400 active:bg-kb-600
+           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kb-600
+           disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none;
   }
   .btn-sub {
-    @apply rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2.5
+           text-sm font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition
+           hover:border-slate-400 hover:bg-slate-50 active:bg-slate-100
+           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400
+           disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold
+           text-slate-500 transition hover:bg-slate-100 hover:text-slate-800;
+  }
+
+  /* ----- 구조 ----- */
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-16px_rgba(15,23,42,0.18)];
+  }
+  .card-head {
+    @apply border-b border-slate-100 px-5 py-4 sm:px-6;
+  }
+  .card-body {
+    @apply px-5 py-5 sm:px-6 sm:py-6;
+  }
+  .label {
+    @apply block text-sm font-semibold text-slate-800;
+  }
+  .hint {
+    @apply mt-1.5 text-xs leading-relaxed text-slate-500;
+  }
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.14em] text-kb-700;
+  }
+  .badge {
+    @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold;
+  }
+  .divide-dot {
+    @apply mx-1.5 text-slate-300;
   }
 }
