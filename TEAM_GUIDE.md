@@ -183,19 +183,17 @@ const CHECKERS: Record<string, Checker> = {
 cp .env.example .env.local     # 그리고 키 채우기
 ```
 
-**공유 계정 같은 거 없다. 키는 각자 발급받는다.** 아래 2개는 전원 필요.
+**키는 노션에 정리돼 있다. 각자 발급받지 말고 노션에서 복사해 붙여넣을 것.**
 
-| 키 | 발급처 | 소요 |
+| 키 | 용도 | 상태 |
 |---|---|---|
-| `JUSO_API_KEY` | business.juso.go.kr → 도로명주소 **검색 API** → 개발용 | 즉시 |
-| `BUILDING_API_KEY` | data.go.kr → 건축HUB 건축물대장정보 | 자동승인 |
+| `JUSO_API_KEY` | 주소 검색 | 노션 |
+| `BUILDING_API_KEY` | 건축HUB 건축물대장 조회 | 노션 |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 진단 결과 저장 | 노션 |
+| `GEMINI_API_KEY` | 상담 요약 문장 다듬기 | ⬜ **미발급** — 없어도 동작함 |
 
-담당자만 필요한 것:
-
-| 키 | 누가 | 발급처 |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 저장 담당(2번) | supabase.com |
-| `GEMINI_API_KEY` | 리포트 담당(후속) | aistudio.google.com |
+`GEMINI_API_KEY`는 아직 발급 전이라 `.env.local`에 비워두면 된다.
+리포트가 템플릿으로 생성될 뿐 판정·화면에는 영향이 없다. 발급되면 노션에 추가된다.
 
 ### 키가 없으면 어떻게 되나
 
@@ -203,7 +201,7 @@ cp .env.example .env.local     # 그리고 키 채우기
 |---|---|
 | `JUSO_API_KEY` | 주소 검색이 **항상** `서울 서초구 강남대로12길 11 (양재동, 현대아트빌라)` 1건만 반환. **검색어와 무관** |
 | `BUILDING_API_KEY` | 건축물대장이 **항상** 같은 샘플 건물로 반환 |
-| `GEMINI_API_KEY` | 리포트가 템플릿으로 생성됨 (품질만 다름, 내용은 정상) |
+| `GEMINI_API_KEY` | 리포트가 템플릿으로 생성됨 (품질만 다름, 내용은 정상) — **현재 상태** |
 | Supabase 키 | 저장만 건너뜀, 판정은 정상 |
 | `USE_FIXTURES=1` | 키가 **있어도** 픽스처 강제. `.env.example`엔 없으니 필요할 때만 직접 추가 |
 
@@ -211,7 +209,8 @@ cp .env.example .env.local     # 그리고 키 채우기
 주소 검색이 계속 양재동만 나오면 버그를 의심하기 전에 `.env.local`부터 확인할 것.
 
 **`.env.local`은 절대 커밋 금지.** (`.gitignore`에 있음)
-키를 단톡·노션에 평문으로 올리지 말 것. 각자 발급이 제일 안전하다.
+노션 페이지도 외부 공유하지 말 것 — 특히 `SUPABASE_SERVICE_ROLE_KEY`는 RLS를 우회하는
+관리자 권한 키라 유출되면 DB 전체가 열린다.
 
 ---
 
