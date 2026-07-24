@@ -1,7 +1,7 @@
 // POST /api/ocr — 등기부 추출 (F03, 2번 담당)
 // MVP: 샘플 데이터 우선. 추출 결과는 반드시 고객 확인 후에만 판정에 사용.
 import { NextResponse } from 'next/server';
-import type { RegistryInfo } from '@/lib/types';
+import type { RegistryInfo } from '@/types';
 
 export const maxDuration = 60; // OCR/파싱은 오래 걸릴 수 있음
 

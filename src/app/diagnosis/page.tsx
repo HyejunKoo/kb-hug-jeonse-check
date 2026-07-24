@@ -1,49 +1,37 @@
 'use client';
-// app/page.tsx — 진단 플로우 (F01 입력 → F02/F03 수집 → 판정 → 결과 카드 → 상담 요약)
-// A 담당: 이 파일과 components/ 를 발전시키면 됨. API 계약은 lib/types.ts 참조.
+// src/app/diagnosis/page.tsx — 진단 플로우 (1번: 입력 / 결과 표시는 후속 에이전트)
+// MVP: 결과는 이 페이지 안에서 인라인 표시. /diagnosis/result 분리는 저장 기능 이후.
 import { useState } from 'react';
 import type {
-  Applicant, PlannedContract, Property, RegistryInfo, DiagnosisCase,
-  PathResult, CheckResult, Verdict,
-} from '@/lib/types';
+  Applicant, PlannedContract, Property, RegistryInfo, PathResult,
+} from '@/types';
+import { DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract } from '@/features/intake/schema';
+import { toDiagnosisCase } from '@/features/intake/mapper';
+import { fetchBuildingInfo } from '@/features/building/client';
+import { Row, Toggle, Nav } from '@/features/intake/components/fields';
+import { ResultCard } from '@/features/result/components/ResultCard';
 
-const VERDICT_UI: Record<Verdict, { label: string; cls: string }> = {
-  PUBLIC_REQUIREMENT_UNMET: { label: '공개요건 미충족', cls: 'bg-red-100 text-red-800 border-red-300' },
-  NO_PUBLIC_CONFLICT_FOUND: { label: '확인된 충돌 없음', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-  MISSING_INFORMATION: { label: '자료 부족', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
-  POST_CONTRACT_REQUIREMENT: { label: '계약 후 충족 요건', cls: 'bg-sky-100 text-sky-800 border-sky-300' },
-  OFFICIAL_REVIEW_REQUIRED: { label: '공식 심사 필요', cls: 'bg-slate-200 text-slate-800 border-slate-400' },
-};
-
-export default function Home() {
+export default function DiagnosisPage() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
 
-  const [applicant, setApplicant] = useState<Applicant>({
-    age: 28, isHouseholder: true, homeCount: 0, maritalStatus: 'SINGLE',
-    incomeBand: 'UNDER_50M', incomeType: 'EMPLOYED', hasExistingJeonseLoan: false,
-  });
-  const [contract, setContract] = useState<PlannedContract>({
-    deposit: 200000000, termMonths: 24, moveInDate: '', brokered: true,
-  });
+  const [applicant, setApplicant] = useState<Applicant>(DEFAULT_APPLICANT);
+  const [contract, setContract] = useState<PlannedContract>(DEFAULT_CONTRACT);
   const [property, setProperty] = useState<Property>({ address: '' });
   const [registry, setRegistry] = useState<RegistryInfo | undefined>();
   const [result, setResult] = useState<PathResult | null>(null);
   const [report, setReport] = useState('');
 
-  async function fetchBuilding() {
+  async function onFetchBuilding() {
     setLoading(true);
     try {
-      const res = await fetch('/api/building', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: property.address }),
-      });
-      const data = await res.json();
-      if (data.property) setProperty(data.property);
+      const p = await fetchBuildingInfo(property.address);
+      if (p) setProperty(p);
     } finally { setLoading(false); }
   }
 
-  async function fetchOcrSample() {
+  async function onFetchOcrSample() {
     setLoading(true);
     try {
       const res = await fetch('/api/ocr', { method: 'POST' });
@@ -52,13 +40,12 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function runCheck() {
+  async function onRunCheck() {
     setLoading(true);
     try {
-      const diag: DiagnosisCase = { applicant, contract, property, registry };
       const res = await fetch('/api/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(diag),
+        body: JSON.stringify(toDiagnosisCase(applicant, contract, property, registry)),
       });
       const data = await res.json();
       setResult(data.pathResult);
@@ -66,7 +53,7 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function makeReport() {
+  async function onMakeReport() {
     if (!result) return;
     setLoading(true);
     try {
@@ -79,15 +66,20 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
+  function next(validate?: () => string[], to?: number) {
+    const errs = validate ? validate() : [];
+    setErrors(errs);
+    if (errs.length === 0 && to !== undefined) setStep(to);
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <header className="mb-8">
         <p className="text-xs font-semibold tracking-widest text-yellow-600">계약 전 사전점검</p>
-        <h1 className="mt-1 text-2xl font-bold">KB 전세 코파일럿 <span className="text-sm font-normal text-slate-400">(MVP · HUG 경로)</span></h1>
-        <p className="mt-2 text-sm text-slate-500">
-          계약금을 지급하기 전, 공개요건 기준으로 확인 가능한 문제를 먼저 찾습니다.
-          결과는 승인·보증 가능성을 의미하지 않습니다.
-        </p>
+        <h1 className="mt-1 text-2xl font-bold">
+          KB 전세 코파일럿 <span className="text-sm font-normal text-slate-400">(MVP · HUG 경로)</span>
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">결과는 승인·보증 가능성을 의미하지 않습니다.</p>
       </header>
 
       <nav className="mb-6 flex gap-2 text-xs">
@@ -97,6 +89,12 @@ export default function Home() {
           </span>
         ))}
       </nav>
+
+      {errors.length > 0 && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {errors.map(e => <p key={e}>{e}</p>)}
+        </div>
+      )}
 
       {step === 0 && (
         <section className="space-y-4 rounded-xl border p-5">
@@ -125,7 +123,7 @@ export default function Home() {
               <option value="UNKNOWN">모름</option>
             </select>
           </Row>
-          <Nav onNext={() => setStep(1)} />
+          <Nav onNext={() => next(() => validateApplicant(applicant), 1)} />
         </section>
       )}
 
@@ -142,7 +140,7 @@ export default function Home() {
           <Row label="공인중개사 중개">
             <Toggle value={contract.brokered} onChange={v => setContract({ ...contract, brokered: v })} yes="중개" no="직거래" />
           </Row>
-          <Nav onPrev={() => setStep(0)} onNext={() => setStep(2)} />
+          <Nav onPrev={() => setStep(0)} onNext={() => next(() => validateContract(contract), 2)} />
         </section>
       )}
 
@@ -152,14 +150,14 @@ export default function Home() {
             <div className="flex gap-2">
               <input className="inp flex-1" placeholder="도로명 주소 입력" value={property.address}
                 onChange={e => setProperty({ ...property, address: e.target.value })} />
-              <button className="btn-sub" onClick={fetchBuilding} disabled={loading}>건축물대장 조회</button>
+              <button className="btn-sub" onClick={onFetchBuilding} disabled={loading}>건축물대장 조회</button>
             </div>
           </Row>
           {property.region && (
             <p className="text-xs text-slate-500">지역 구분: {property.region === 'CAPITAL' ? '수도권' : '비수도권'} (주소 파싱)</p>
           )}
           <Row label="등기부 (샘플)">
-            <button className="btn-sub" onClick={fetchOcrSample} disabled={loading}>샘플 등기부 불러오기</button>
+            <button className="btn-sub" onClick={onFetchOcrSample} disabled={loading}>샘플 등기부 불러오기</button>
           </Row>
           {registry && (
             <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
@@ -168,7 +166,7 @@ export default function Home() {
                  · 권리침해: {registry.hasRightsViolation?.value ? '있음' : '없음'}</p>
             </div>
           )}
-          <Nav onPrev={() => setStep(1)} onNext={runCheck} nextLabel={loading ? '판정 중…' : '사전점검 실행'} />
+          <Nav onPrev={() => setStep(1)} onNext={onRunCheck} nextLabel={loading ? '판정 중…' : '사전점검 실행'} />
         </section>
       )}
 
@@ -195,7 +193,7 @@ export default function Home() {
 
           <div className="flex gap-2">
             <button className="btn-sub" onClick={() => { setStep(0); setResult(null); setReport(''); }}>처음부터</button>
-            <button className="btn-main" onClick={makeReport} disabled={loading}>
+            <button className="btn-main" onClick={onMakeReport} disabled={loading}>
               {loading ? '생성 중…' : 'KB 상담용 요약 생성'}
             </button>
           </div>
@@ -205,55 +203,5 @@ export default function Home() {
         </section>
       )}
     </main>
-  );
-}
-
-function ResultCard({ r }: { r: CheckResult }) {
-  const v = VERDICT_UI[r.verdict];
-  return (
-    <div className="rounded-xl border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">{r.label}</p>
-        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${v.cls}`}>{v.label}</span>
-      </div>
-      <p className="mt-1 text-sm text-slate-600">{r.reason}</p>
-      {r.usedValues.length > 0 && (
-        <p className="mt-1 text-xs text-slate-400">근거: {r.usedValues.join(' · ')}</p>
-      )}
-      {r.nextAction && <p className="mt-1 text-xs text-yellow-700">→ {r.nextAction}</p>}
-      <p className="mt-1 text-[10px] text-slate-400">
-        출처 <a className="underline" href={r.sourceUrl} target="_blank" rel="noreferrer">{r.sourceUrl}</a> · 기준일 {r.effectiveFrom}
-      </p>
-    </div>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function Toggle({ value, onChange, yes, no }: { value: boolean; onChange: (v: boolean) => void; yes: string; no: string }) {
-  return (
-    <div className="flex gap-2">
-      {[{ v: true, t: yes }, { v: false, t: no }].map(o => (
-        <button key={o.t} type="button"
-          className={`rounded-lg border px-3 py-1.5 text-sm ${value === o.v ? 'border-yellow-500 bg-yellow-50 font-semibold' : 'border-slate-200 text-slate-500'}`}
-          onClick={() => onChange(o.v)}>{o.t}</button>
-      ))}
-    </div>
-  );
-}
-
-function Nav({ onPrev, onNext, nextLabel = '다음' }: { onPrev?: () => void; onNext: () => void; nextLabel?: string }) {
-  return (
-    <div className="flex justify-between pt-2">
-      {onPrev ? <button className="btn-sub" onClick={onPrev}>이전</button> : <span />}
-      <button className="btn-main" onClick={onNext}>{nextLabel}</button>
-    </div>
   );
 }

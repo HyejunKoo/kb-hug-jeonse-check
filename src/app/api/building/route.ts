@@ -2,8 +2,8 @@
 // body: { address: string } → res: { property: Partial<Property> }
 // 키가 없거나 실패하면 값 없이 반환 → 엔진이 MISSING_INFORMATION으로 처리
 import { NextResponse } from 'next/server';
-import { parseRegion } from '@/lib/ruleEngine';
-import type { Property } from '@/lib/types';
+import { parseRegion } from '@/lib/rule-engine';
+import type { Property } from '@/types';
 
 export const maxDuration = 30;
 

@@ -1,23 +1,21 @@
 // ============================================================
-// lib/ruleEngine.ts — 규칙엔진 (순수 함수만)
+// src/lib/rule-engine/evaluator.ts — 개별 체크 함수 (순수 함수만)
 // 절대 규칙: 판정은 여기서만 한다. LLM에게 판정 시키지 않는다.
 // 동일 입력 + 동일 규칙팩 버전 → 항상 동일 결과 (결정론)
 // ============================================================
-import type {
-  DiagnosisCase, Rule, RulePack, CheckResult, PathResult, Verdict,
-} from './types';
+import type { DiagnosisCase, Rule, Verdict } from '@/types';
 
 const won = (n: number) => `${(n / 100000000).toFixed(1)}억원`;
 
 /** 개별 체크 함수의 반환: verdict + 사람이 읽는 근거 */
-interface CheckOutcome {
+export interface CheckOutcome {
   verdict: Verdict;
   reason: string;
   usedValues: string[];
   nextAction: string;
 }
 
-type Checker = (c: DiagnosisCase, params: Rule['params']) => CheckOutcome;
+export type Checker = (c: DiagnosisCase, params: Rule['params']) => CheckOutcome;
 
 // ---------- 1층: KB 상품요건 체크 ----------
 
@@ -196,7 +194,7 @@ const alwaysOfficialReview: Checker = () => ({
 
 // ---------- 레지스트리 ----------
 
-const CHECKERS: Record<string, Checker> = {
+export const CHECKERS: Record<string, Checker> = {
   checkAge,
   checkHouseholder,
   checkHomeCount,
@@ -211,45 +209,3 @@ const CHECKERS: Record<string, Checker> = {
   alwaysOfficialReview,
 };
 
-// ---------- 엔진 본체 ----------
-
-export function runRulePack(diag: DiagnosisCase, pack: RulePack): PathResult {
-  const results: CheckResult[] = pack.rules.map((rule) => {
-    const checker = CHECKERS[rule.checkId];
-    if (!checker) {
-      return {
-        ruleId: rule.ruleId, layer: rule.layer, label: rule.label,
-        verdict: 'MISSING_INFORMATION',
-        reason: `checkId '${rule.checkId}' 미구현 — 규칙팩과 엔진 버전 불일치`,
-        usedValues: [], sourceUrl: rule.sourceUrl,
-        effectiveFrom: rule.effectiveFrom, nextAction: '',
-      };
-    }
-    const out = checker(diag, rule.params);
-    return {
-      ruleId: rule.ruleId, layer: rule.layer, label: rule.label,
-      verdict: out.verdict, reason: out.reason, usedValues: out.usedValues,
-      sourceUrl: rule.sourceUrl, effectiveFrom: rule.effectiveFrom,
-      nextAction: out.nextAction,
-    };
-  });
-
-  const unmetProduct = results.some(r => r.layer === 'PRODUCT' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
-  const unmetGuarantee = results.some(r => r.layer === 'GUARANTEE' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
-  const blockedAt = unmetProduct ? 'PRODUCT' : unmetGuarantee ? 'GUARANTEE' : 'NONE';
-
-  return {
-    path: 'KB_STAR_HUG',
-    pathLabel: 'KB스타 전세자금대출 (HUG)',
-    blockedAt,
-    results,
-    officialReviewCount: results.filter(r => r.verdict === 'OFFICIAL_REVIEW_REQUIRED').length,
-  };
-}
-
-/** 주소 문자열에서 수도권/비수도권 파싱 (F02) */
-export function parseRegion(address: string): 'CAPITAL' | 'NON_CAPITAL' | undefined {
-  if (!address.trim()) return undefined;
-  const capital = ['서울', '경기', '인천'];
-  return capital.some(k => address.includes(k)) ? 'CAPITAL' : 'NON_CAPITAL';
-}
