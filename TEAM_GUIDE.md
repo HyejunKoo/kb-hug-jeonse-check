@@ -8,6 +8,7 @@
 ## 1. 5분 안에 띄우기
 
 ```bash
+node -v                # v22.x 여야 한다. 아니면 아래 "Node 버전" 참고
 npm ci                 # npm install 말고 ci. lock 파일 그대로 설치돼서 버전이 안 흔들림
 cp .env.example .env.local
 npm run dev            # http://localhost:3000
@@ -17,7 +18,18 @@ npm run dev            # http://localhost:3000
 
 키가 없어도 앱이 죽지는 않는다. 다만 공공 API 호출이 픽스처(저장해둔 샘플 응답)로 대체돼서
 **뭘 검색하든 같은 결과가 나온다.** UI·판정 로직만 만지는 작업이면 그대로 개발해도 되지만,
-주소·건물 조회를 확인해야 하는 작업이면 키부터 발급받을 것.
+주소·건물 조회를 확인해야 하는 작업이면 노션에서 키부터 가져올 것.
+
+### Node 버전 — 전원 22로 통일
+
+Vercel 빌드도 22로 돌기 때문에 로컬이 다르면 "내 컴에선 되는데" 상황이 생긴다.
+
+```bash
+nvm install 22 && nvm use 22    # nvm 쓰면 .nvmrc 보고 알아서 잡힌다: nvm use
+```
+
+`engine-strict=true`가 걸려 있어서 **다른 메이저 버전이면 `npm ci`가 아예 실패한다.**
+`EBADENGINE` 에러가 나면 Node를 22로 올리라는 뜻이지 코드 문제가 아니다.
 
 ```bash
 npm run typecheck      # 커밋 전에 이거 한 번 (빌드보다 빠름)
@@ -221,6 +233,23 @@ cp .env.example .env.local     # 그리고 키 채우기
 - 타입은 `src/types/`에 정의된 것만. 추가 필요하면 `case.ts`/`rule.ts`/`api.ts` 중 맞는 데 넣고 공유
 - 커밋 전 `npm run typecheck`
 - 남의 담당 폴더를 건드려야 하면 먼저 물어볼 것
+
+### 환경이 자동으로 맞춰지는 장치
+
+건드리지 말 것. 이것들 때문에 "내 컴에선 되는데"가 안 생긴다.
+
+| 파일 | 역할 |
+|---|---|
+| `package.json` + `package-lock.json` | 의존성 목록·정확한 버전. `npm ci`가 lock 그대로 설치 |
+| `.nvmrc` (`22`) | nvm 쓰면 `nvm use`로 Node 버전 자동 전환 |
+| `package.json` `engines: 22.x` | Vercel이 이 버전으로 빌드 |
+| `.npmrc` `engine-strict=true` | Node 버전 다르면 `npm ci` 실패시켜 강제 |
+| `.npmrc` `save-exact=true` | 새 패키지 설치 시 `^` 없이 고정 버전으로 기록 |
+| `.gitattributes` | 줄바꿈 LF 통일. Windows/Mac 섞여도 diff 안 깨짐 |
+| `tsconfig.json` / `.eslintrc.json` | 타입·린트 기준 통일 |
+
+**`package-lock.json`은 반드시 커밋한다.** 이게 requirements.txt 역할이라 빼면 통일이 깨진다.
+머지 충돌 나면 직접 편집하지 말고 `git checkout --theirs package-lock.json && npm install` 로 재생성.
 
 ---
 

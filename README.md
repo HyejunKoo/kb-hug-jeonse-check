@@ -10,8 +10,11 @@
 
 ## 빠른 시작
 
+**Node 22 필요** (`.nvmrc` 있음 — nvm 쓰면 `nvm use`). 다른 버전이면 `npm ci`가 `EBADENGINE`으로 실패한다.
+
 ```bash
-npm ci                       # install 말고 ci (lock 고정)
+nvm use                      # 또는 node -v 로 v22.x 확인
+npm ci                       # install 말고 ci (lock 그대로 설치)
 cp .env.example .env.local   # 키는 노션에서 복사 — 아래 참고
 npm run dev                  # http://localhost:3000
 ```

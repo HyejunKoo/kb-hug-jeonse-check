@@ -1,0 +1,16 @@
+# 줄바꿈 통일 — 각자 git 설정(core.autocrlf)과 무관하게 저장소·작업트리 모두 LF.
+# 이게 없으면 Windows/Mac 팀원 사이에서 파일 전체가 변경된 것처럼 보이는 diff가 난다.
+* text=auto eol=lf
+
+# 바이너리 (줄바꿈 변환 금지)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# 자동 생성 파일 — GitHub diff에서 접어둔다
+package-lock.json linguist-generated=true -diff
