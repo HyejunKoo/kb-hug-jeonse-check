@@ -182,7 +182,7 @@ const CHECKERS: Record<string, Checker> = {
 | `BUILDING_API_KEY` | 픽스처 건물정보 반환 | data.go.kr → 건축HUB 건축물대장정보 (자동승인) |
 | `GEMINI_API_KEY` | 리포트가 템플릿으로 생성됨 | aistudio.google.com |
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 저장만 건너뜀 | supabase.com |
-| `USE_FIXTURES=1` | 키가 있어도 픽스처 강제 | — |
+| `USE_FIXTURES=1` | 키가 있어도 픽스처 강제 | `.env.example`엔 없음. 필요하면 `.env.local`에 직접 추가 |
 
 **`.env.local`은 절대 커밋 금지.** 키를 단톡·노션에 평문으로 올리지 말 것. 각자 발급이 제일 안전하다.
 
@@ -232,6 +232,7 @@ const CHECKERS: Record<string, Checker> = {
 | | 상태 |
 |---|---|
 | 프로젝트 세팅·타입·배포 설정 | ✅ |
+| UI (디자인 토큰·스테퍼·결과 카드) | ✅ |
 | F01 신청인·계약 입력 | ✅ |
 | F02 주소검색 → 건축HUB (실연동) | ✅ |
 | F03 등기부 OCR | ⬜ 샘플만 |

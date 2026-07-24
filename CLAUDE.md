@@ -95,8 +95,9 @@ supabase/schema.sql               DB 스키마
 
 ## 현재 상태 / TODO
 
-- [완료] 빌드 통과, /api/check 판정 동작 검증됨, git 첫 커밋 있음
-- [TODO-1번] `app/api/building/route.ts` + `features/building/mapper.ts`: 건축HUB 표제부(getBrTitleInfo) 실제 호출. 주소→행정코드 변환 포함. 응답에서 용도·위반건축물 표시·전용면적을 `Field<T>`(source: 'PUBLIC_API')로 매핑
+- [완료] 빌드 통과, /api/check 판정 동작 검증됨, GitHub 원격 연결(HyejunKoo/kb-hug-jeonse-check)
+- [완료-1번] `app/api/address` + `app/api/building` + `features/building/mapper.ts`: 주소검색→행정코드→건축HUB 표제부 실연동. 위반건축물은 공개 API 미제공이라 영구 자료 부족 처리
+- [완료] UI 개편: 디자인 토큰(`kb-*` 팔레트)·스테퍼·결과 카드. `tailwind.config.ts` 수정 시 dev 서버 재시작 필요
 - [TODO-2번] `app/api/ocr/route.ts` + `features/registry/parser.ts`: PDF 업로드 받아 소유자·근저당액·권리침해 추출 + 화면에 고객 확인·수정 단계 추가 (F03, F04)
 - [TODO-3번] `src/rules/kb-hug.json` 검수 + `lib/crawlers/` 크롤러 구현: params·sourceUrl·effectiveFrom 을 KB 상품공시·HUG 공식 문서로 검수 (현재 수치는 골격용 예시값)
 - [TODO] F04 자료 충분성 검사: check 실행 전 주소 일치·필수값·등기부 발급일 검사, 부족하면 판정 중단하고 필요한 것 안내
