@@ -12,7 +12,7 @@
 
 ```bash
 npm ci                       # install 말고 ci (lock 고정)
-cp .env.example .env.local   # 키는 각자 발급 — 아래 참고
+cp .env.example .env.local   # 키는 노션에서 복사 — 아래 참고
 npm run dev                  # http://localhost:3000
 ```
 
