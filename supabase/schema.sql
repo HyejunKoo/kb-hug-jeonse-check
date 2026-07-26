@@ -16,5 +16,28 @@ create table if not exists diagnosis_cases (
 create index if not exists idx_diagnosis_cases_status on diagnosis_cases (status);
 create index if not exists idx_diagnosis_cases_created_at on diagnosis_cases (created_at desc);
 
--- 서버(service role)만 접근. anon 접근 차단.
+-- 서버(service role)는 RLS를 우회해 항상 접근 가능.
+-- anon(비로그인)은 아래에 정책이 없으므로 기본 차단 유지.
 alter table diagnosis_cases enable row level security;
+
+-- ---------- Supabase Auth 로그인 사용자별 저장/조회 ----------
+-- 기존 익명 row는 user_id = null로 보존한다 (auth.uid()와 절대 일치하지 않으므로 로그인 사용자에게 노출되지 않음).
+alter table diagnosis_cases add column if not exists user_id uuid references auth.users(id) on delete cascade;
+
+create index if not exists idx_diagnosis_cases_user_created on diagnosis_cases (user_id, created_at desc);
+
+-- 로그인 사용자는 본인 소유(user_id = auth.uid()) row만 select/insert/delete 가능. update는 1차 범위 밖.
+drop policy if exists "diagnosis_cases_select_own" on diagnosis_cases;
+create policy "diagnosis_cases_select_own" on diagnosis_cases
+  for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "diagnosis_cases_insert_own" on diagnosis_cases;
+create policy "diagnosis_cases_insert_own" on diagnosis_cases
+  for insert to authenticated
+  with check (user_id = auth.uid());
+
+drop policy if exists "diagnosis_cases_delete_own" on diagnosis_cases;
+create policy "diagnosis_cases_delete_own" on diagnosis_cases
+  for delete to authenticated
+  using (user_id = auth.uid());

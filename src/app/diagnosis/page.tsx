@@ -2,6 +2,7 @@
 // src/app/diagnosis/page.tsx — 진단 플로우
 // 1 신청인 → 2 예정계약 → 3 매물·등기 → 4 결과
 import { useState } from 'react';
+import Link from 'next/link';
 import type {
   Applicant, PlannedContract, Property, RegistryInfo, PathResult, Verdict,
 } from '@/types';
@@ -42,6 +43,7 @@ export default function DiagnosisPage() {
   const [property, setProperty] = useState<Property>({ address: '' });
   const [registry, setRegistry] = useState<RegistryInfo | undefined>();
   const [result, setResult] = useState<PathResult | null>(null);
+  const [caseId, setCaseId] = useState<string | null>(null);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -91,7 +93,9 @@ export default function DiagnosisPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(toDiagnosisCase(applicant, contract, property, registry)),
       });
-      setResult((await res.json()).pathResult);
+      const data = await res.json();
+      setResult(data.pathResult);
+      setCaseId(data.caseId ?? null);
       setStep(3);
     } finally { setLoading(false); }
   }
@@ -472,6 +476,16 @@ export default function DiagnosisPage() {
                   <p className="mt-5 rounded-lg bg-slate-50 px-3.5 py-2.5 text-xs leading-relaxed text-slate-500">
                     공식 심사 필요 {result.officialReviewCount}건 · &lsquo;확인된 충돌 없음&rsquo;은 승인·보증 가능을 의미하지 않습니다.
                   </p>
+
+                  {caseId ? (
+                    <p className="mt-3 text-xs font-semibold text-emerald-700">
+                      ✓ 저장됨 · <Link href="/diagnosis/result" className="underline underline-offset-2">내 이력에서 보기</Link>
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">
+                      <Link href="/login" className="font-semibold text-kb-700 underline underline-offset-2">로그인하면 결과를 저장할 수 있어요</Link>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -509,7 +523,7 @@ export default function DiagnosisPage() {
 
               {/* 액션 */}
               <div className="flex flex-wrap gap-2">
-                <button className="btn-sub" onClick={() => { setStep(0); setResult(null); setReport(''); }}>
+                <button className="btn-sub" onClick={() => { setStep(0); setResult(null); setCaseId(null); setReport(''); }}>
                   처음부터
                 </button>
                 <button className="btn-main" onClick={onMakeReport} disabled={loading}>

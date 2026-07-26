@@ -68,8 +68,9 @@ src/
 ├─ app/
 │  ├─ page.tsx                  랜딩
 │  ├─ diagnosis/page.tsx        진단 플로우 4단계   ← 공용. 수정 시 아래 "충돌 주의" 참고
-│  ├─ diagnosis/result/         [MVP 이후] 저장된 진단 조회
-│  ├─ login/                    [MVP 이후] Supabase Auth        · 2번
+│  ├─ diagnosis/result/         저장된 진단 이력 목록·상세         · 2번 ✅
+│  ├─ login/                    Supabase Auth 이메일 매직링크/OTP  · 2번 ✅
+│  ├─ auth/confirm, auth/signout  Auth 콜백·로그아웃              · 2번 ✅
 │  └─ api/
 │     ├─ address/route.ts       주소 후보 검색                   · 1번 ✅
 │     ├─ building/route.ts      건축HUB 표제부 조회              · 1번 ✅
@@ -88,7 +89,7 @@ src/
 │  │  ├─ index.ts               엔진 본체 (규칙팩 순회 → PathResult)
 │  │  └─ evaluator.ts           개별 체크 함수 + CHECKERS 레지스트리 · 3번
 │  ├─ crawlers/                 KB·HUG 크롤러 + 폴백 provider      · 3번 ⬜
-│  ├─ supabase/                 server(service_role) / client(anon) · 2번
+│  ├─ supabase/                 server(admin+요청자세션) / client(anon) · 2번 ✅
 │  └─ gemini/client.ts          Gemini 초기화
 ├─ types/                       case.ts / rule.ts / api.ts + 배럴  ← 전원 `@/types`로 import
 └─ rules/
@@ -202,6 +203,7 @@ cp .env.example .env.local     # 그리고 키 채우기
 | `JUSO_API_KEY` | 주소 검색 | 노션 |
 | `BUILDING_API_KEY` | 건축HUB 건축물대장 조회 | 노션 |
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 진단 결과 저장 | 노션 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 로그인(Auth)·본인 이력 조회 | 노션 |
 | `GEMINI_API_KEY` | 상담 요약 문장 다듬기 | ⬜ **미발급** — 없어도 동작함 |
 
 `GEMINI_API_KEY`는 아직 발급 전이라 `.env.local`에 비워두면 된다.
@@ -223,6 +225,14 @@ cp .env.example .env.local     # 그리고 키 채우기
 **`.env.local`은 절대 커밋 금지.** (`.gitignore`에 있음)
 노션 페이지도 외부 공유하지 말 것 — 특히 `SUPABASE_SERVICE_ROLE_KEY`는 RLS를 우회하는
 관리자 권한 키라 유출되면 DB 전체가 열린다.
+
+### 로그인(매직링크) 쓰려면 Supabase 대시보드 설정도 필요
+
+`supabase/schema.sql`을 최신 상태로 다시 실행(`user_id`+RLS 정책 추가분)한 뒤,
+**Auth → Email Templates → Magic Link**의 `{{ .ConfirmationURL }}`을
+`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` 형태로 바꿔야
+`/login`에서 보낸 메일의 링크가 실제로 로그인까지 이어진다. 안 바꿔도 메일 속 6자리 코드
+입력으로는 로그인 가능하다.
 
 ---
 
