@@ -201,12 +201,28 @@ const checkOwnerMatch: Checker = (c) => {
       nextAction: '등기부를 업로드해 소유자명과 임대인명이 같은지 확인해 주세요.',
     };
   }
-  const ok = f.value === true;
+  const used = ['소유자·임대인 일치 여부 (고객확인문서)'];
+  if (f.value === 'MATCHED') {
+    return {
+      verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+      reason: '등기부 소유자와 계약 임대인이 일치함',
+      usedValues: used,
+      nextAction: '',
+    };
+  }
+  if (f.value === 'MATCHED_PARTIAL_CO_OWNERS') {
+    return {
+      verdict: 'OFFICIAL_REVIEW_REQUIRED',
+      reason: '등기부상 공동소유자 중 일부만 계약 임대인으로 기재됨 — 나머지 공유자의 동의 여부는 계약 전 확인 필요',
+      usedValues: used,
+      nextAction: '계약에 참여하지 않은 다른 공유자의 동의서·위임장을 임대인에게 요청하고 KB 상담 시 제시하세요.',
+    };
+  }
   return {
-    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: ok ? '등기부 소유자와 계약 임대인이 일치함' : '등기부 소유자와 계약 임대인이 일치하지 않음',
-    usedValues: ['소유자·임대인 일치 여부 (고객확인문서)'],
-    nextAction: ok ? '' : '임대인이 실제 소유자가 맞는지, 대리 계약이라면 위임장·인감증명서를 갖추었는지 확인하세요.',
+    verdict: 'PUBLIC_REQUIREMENT_UNMET',
+    reason: '등기부 소유자와 계약 임대인이 일치하지 않음',
+    usedValues: used,
+    nextAction: '임대인이 실제 소유자가 맞는지, 대리 계약이라면 위임장·인감증명서를 갖추었는지 확인하세요.',
   };
 };
 

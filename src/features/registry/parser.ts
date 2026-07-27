@@ -122,24 +122,47 @@ function sliceSection(lines: Line[], start: RegExp, end?: RegExp): Line[] {
 
 // ---------- 갑구: 소유자 ----------
 
-const OWNER_KEYWORD_RE = looseRe('소유자');
+// 단독소유는 "소유자", 공동소유(지분권)는 "공유자"로 표기된다 — 둘 다 잡아야 한다.
+const OWNER_KEYWORD_RE = new RegExp(`(${looseRe('소유자').source}|${looseRe('공유자').source})`);
 const CORP_MARKER_RE = /(주식회사|㈜|유한회사|재단법인|사단법인|조합|공사|공단)/;
 const KOREAN_NAME_RE = /[가-힣]{2,4}(?=[\s(]|$)/;
+// 이름 뒤에는 주민등록번호(뒷자리 마스킹 포함)가 바로 붙는다 — "지분", "10분의 3" 같은
+// 공유 지분 표기보다 훨씬 정확하게 실제 이름 위치를 짚어준다.
+const NAME_WITH_REGNUM_RE = /([가-힣]{2,4})\s*\d{6}-[\d*]{6,7}/g;
 const CANCELLED_RE = looseRe('말소');
+
+// 공유자 목록(지분·이름·주민번호·주소가 여러 줄 반복)을 다 담기 위해 넉넉한 창을 쓴다.
+// 그다음 항목(등기명의인표시 변경 등)까지 넘어가도 주민번호가 바로 붙은 토큰만 뽑으므로 오탐 위험은 낮다.
+const OWNER_LIST_WINDOW = 10;
+// 공동소유는 문서 형식에 따라 키워드가 한 번만("공유자" 뒤에 여러 명 나열)이거나, 사람마다
+// 반복("공유자 A" ... "공유자 B")될 수 있다. 이 간격 이내로 붙어있는 키워드들은 같은 등록
+// 건(공동소유)으로 보고 전부 묶는다 — 단, 그 사이에 새 등록 건 표시(소유권이전 등)가 있으면
+// 묶지 않는다 (과거 소유자를 현재 소유자와 합치는 것을 막기 위함).
+const OWNER_GROUP_GAP = 6;
+const OWNERSHIP_EVENT_RE = /소유권\s*(일부\s*)?이전|소유권\s*보존/;
 
 function extractOwner(gapgu: Line[]): {
   ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
-  ownerNameCandidate?: OcrFieldDraft<string>;
+  ownerNameCandidates?: OcrFieldDraft<string[]>;
 } {
   // 갑구는 접수 순서(순위번호)대로 나열되므로, 소유권 이전 이력이 있으면 소유자 표기가
   // 여러 번 등장한다. 가장 마지막(=가장 최근) 항목이 현재 소유자일 가능성이 높다.
-  let idx = -1;
-  for (let i = gapgu.length - 1; i >= 0; i -= 1) {
-    if (OWNER_KEYWORD_RE.test(gapgu[i].text)) { idx = i; break; }
-  }
-  if (idx === -1) return {};
+  const keywordIdxs: number[] = [];
+  gapgu.forEach((l, i) => { if (OWNER_KEYWORD_RE.test(l.text)) keywordIdxs.push(i); });
+  if (keywordIdxs.length === 0) return {};
 
-  const windowLines = gapgu.slice(idx, idx + 3);
+  const lastIdx = keywordIdxs[keywordIdxs.length - 1];
+  let clusterStart = lastIdx;
+  for (let k = keywordIdxs.length - 2; k >= 0; k -= 1) {
+    const candidateIdx = keywordIdxs[k];
+    if (clusterStart - candidateIdx > OWNER_GROUP_GAP) break;
+    const between = gapgu.slice(candidateIdx + 1, clusterStart);
+    if (between.some((l) => OWNERSHIP_EVENT_RE.test(l.text))) break; // 그 사이에 새 등록 건이 시작됨
+    clusterStart = candidateIdx;
+  }
+
+  const windowEnd = Math.min(gapgu.length, lastIdx + OWNER_LIST_WINDOW);
+  const windowLines = gapgu.slice(clusterStart, windowEnd);
   const windowText = windowLines.map((l) => l.text).join(' ');
   const confidence = Math.min(...windowLines.map((l) => l.minConfidence));
   const status = statusOf(confidence);
@@ -148,16 +171,40 @@ function extractOwner(gapgu: Line[]): {
     const m = windowText.match(new RegExp(`[가-힣A-Za-z()㈜]{0,20}${CORP_MARKER_RE.source}[가-힣A-Za-z()㈜]{0,10}`));
     return {
       ownerType: { value: 'CORPORATION', confidence, status },
-      ownerNameCandidate: m ? { value: m[0].trim(), confidence, status, evidence: m[0].trim() } : missingField(),
+      ownerNameCandidates: m ? { value: [m[0].trim()], confidence, status, evidence: m[0].trim() } : missingField(),
     };
   }
 
-  const afterKeyword = windowText.replace(new RegExp(`^[\\s\\S]*?${OWNER_KEYWORD_RE.source}`), '');
-  const nameMatch = afterKeyword.match(KOREAN_NAME_RE);
-  if (nameMatch) {
+  // 공유자는 이름이 여러 번(지분별로 또는 사람마다) 나오므로 클러스터 전체에서
+  // "이름+주민번호" 패턴을 전부 모은다.
+  const names: string[] = [];
+  const re = new RegExp(NAME_WITH_REGNUM_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(windowText)) !== null) {
+    if (!names.includes(m[1])) names.push(m[1]);
+  }
+
+  if (names.length > 0) {
     return {
       ownerType: { value: 'INDIVIDUAL', confidence, status },
-      ownerNameCandidate: { value: nameMatch[0], confidence, status, evidence: nameMatch[0] },
+      ownerNameCandidates: { value: names, confidence, status, evidence: names.join(', ') },
+    };
+  }
+
+  // 주민번호가 인식되지 않은 경우의 대비책 — 클러스터 안 키워드 각각의 바로 뒤 한글 이름
+  // 후보를 모은다 (키워드가 사람마다 반복되는 형식이면 이 경로로 여러 명이 모두 잡힌다).
+  const fallbackNames: string[] = [];
+  for (const kIdx of keywordIdxs) {
+    if (kIdx < clusterStart) continue;
+    const seg = gapgu.slice(kIdx, Math.min(gapgu.length, kIdx + 3)).map((l) => l.text).join(' ');
+    const after = seg.replace(new RegExp(`^[\\s\\S]*?${OWNER_KEYWORD_RE.source}`), '');
+    const name = after.match(KOREAN_NAME_RE)?.[0];
+    if (name && !fallbackNames.includes(name)) fallbackNames.push(name);
+  }
+  if (fallbackNames.length > 0) {
+    return {
+      ownerType: { value: 'INDIVIDUAL', confidence, status },
+      ownerNameCandidates: { value: fallbackNames, confidence, status, evidence: fallbackNames.join(', ') },
     };
   }
   return { ownerType: missingField() };
@@ -188,7 +235,11 @@ function extractRightsViolation(gapgu: Line[]): OcrFieldDraft<boolean> {
 
   // 갑구를 읽긴 했으나 위 키워드가 전혀 없는 경우에만 "없음" 후보로 표시한다.
   // 섹션 자체의 인식 신뢰도가 낮으면 놓친 것일 수 있으므로 MISSING으로 둔다 (false로 단정 금지).
-  const sectionConfidence = gapgu.reduce((min, l) => Math.min(min, l.minConfidence), 1);
+  // 단, 첫 줄(섹션 헤더 "【 갑구 】")은 특수문자 때문에 구조적으로 신뢰도가 낮게 나오는 경우가
+  // 많아 헤더 자체는 신뢰도 판단에서 제외하고 실제 내용 줄만 본다.
+  const contentLines = gapgu.slice(1);
+  if (contentLines.length === 0) return missingField();
+  const sectionConfidence = contentLines.reduce((min, l) => Math.min(min, l.minConfidence), 1);
   if (sectionConfidence < OCR_CONFIDENCE_THRESHOLD) return missingField();
   return { value: false, confidence: sectionConfidence, status: 'EXTRACTED' };
 }
@@ -200,11 +251,32 @@ const AMOUNT_RE = /금?\s*([0-9][0-9,]*)\s*원/;
 
 const LIEN_AMOUNT_WINDOW = 3; // 채권최고액 키워드 줄부터 최대 이만큼(포함) 안에서 금액을 찾는다
 
+// 등기부의 말소는 원래 항목 줄에 표시되지 않고, "2번근저당권설정, 3번근저당권설정 등기말소"처럼
+// 뒤에 별도 순위번호로 오는 새 항목으로 기록된다. 그래서 같은 줄 안의 "말소"만 봐서는 걸러지지 않는다.
+const CANCEL_REF_RE = /(\d+)\s*번/g;
+const ENTRY_TRAILING_NUM_RE = /(?:^|\s)(\d{1,3})\s*$/;
+
+/** "말소" 항목이 참조하는 순위번호를 모은다 (예: "2번근저당권설정, 3번근저당권설정 등기말소" → {2, 3}) */
+function findCancelledEntryNumbers(eulgu: Line[]): Set<number> {
+  const cancelled = new Set<number>();
+  eulgu.forEach((l, i) => {
+    if (!CANCELLED_RE.test(l.text)) return;
+    const windowText = eulgu.slice(Math.max(0, i - 2), i + 1).map((x) => x.text).join(' ');
+    const re = new RegExp(CANCEL_REF_RE.source, 'g');
+    let m: RegExpExecArray | null;
+    // eslint-disable-next-line no-cond-assign
+    while ((m = re.exec(windowText))) cancelled.add(Number(m[1]));
+  });
+  return cancelled;
+}
+
 function extractSeniorLienTotal(eulgu: Line[]): OcrFieldDraft<number> {
   const keywordIdxs = eulgu
     .map((l, i) => i)
     .filter((i) => LIEN_KEYWORD_RE.test(eulgu[i].text) && !CANCELLED_RE.test(eulgu[i].text));
   if (keywordIdxs.length === 0) return missingField();
+
+  const cancelledEntryNumbers = findCancelledEntryNumbers(eulgu);
 
   let sum = 0;
   let minConfidence = 1;
@@ -222,6 +294,15 @@ function extractSeniorLienTotal(eulgu: Line[]): OcrFieldDraft<number> {
       if (!m) continue;
       const amount = Number(m[1].replace(/,/g, ''));
       if (!Number.isFinite(amount)) continue;
+
+      // 이 채권최고액 항목 자신의 순위번호가 뒤에서 말소 참조된 번호와 같으면 합계에서 뺀다.
+      const entryNumMatch = eulgu[startIdx].text.match(ENTRY_TRAILING_NUM_RE) ?? eulgu[i].text.match(ENTRY_TRAILING_NUM_RE);
+      const entryNum = entryNumMatch ? Number(entryNumMatch[1]) : undefined;
+      if (entryNum !== undefined && cancelledEntryNumbers.has(entryNum)) {
+        usedLines.add(i);
+        break;
+      }
+
       sum += amount;
       minConfidence = Math.min(minConfidence, eulgu[i].minConfidence);
       evidenceParts.push(m[0]);
@@ -231,6 +312,36 @@ function extractSeniorLienTotal(eulgu: Line[]): OcrFieldDraft<number> {
   }
   if (evidenceParts.length === 0) return missingField();
   return { value: sum, confidence: minConfidence, status: statusOf(minConfidence), evidence: evidenceParts.join(', ') };
+}
+
+// ---------- 을구: 기존 전세권·임차권 등 등록된 권리 (참고용) ----------
+// 근저당과 달리 금액을 정확히 합산하지 않는다 — 변경(예: "1번전세권변경")과 말소를 문자만으로
+// 구분하기 어려워 금액을 잘못 이중 계산할 위험이 크다. 대신 "남아있는지 여부"만 후보화하고
+// evidence로 원문을 보여줘 고객이 직접 금액을 확인하게 한다.
+const LEASEHOLD_KEYWORD_RE = new RegExp(`(${looseRe('전세권설정').source}|${looseRe('임차권설정').source})`);
+
+function extractExistingLeaseholdRights(eulgu: Line[]): OcrFieldDraft<boolean> {
+  if (eulgu.length === 0) return missingField();
+
+  const cancelledEntryNumbers = findCancelledEntryNumbers(eulgu);
+  const hits = eulgu.filter((l) => {
+    if (!LEASEHOLD_KEYWORD_RE.test(l.text) || CANCELLED_RE.test(l.text)) return false;
+    const entryNumMatch = l.text.match(ENTRY_TRAILING_NUM_RE);
+    const entryNum = entryNumMatch ? Number(entryNumMatch[1]) : undefined;
+    return !(entryNum !== undefined && cancelledEntryNumbers.has(entryNum));
+  });
+
+  if (hits.length > 0) {
+    const confidence = Math.min(...hits.map((l) => l.minConfidence));
+    return { value: true, confidence, status: statusOf(confidence), evidence: hits.map((l) => l.text).join(' / ') };
+  }
+
+  // 헤더 줄("【 을구 】")은 신뢰도 판단에서 제외 (갑구와 동일한 이유)
+  const contentLines = eulgu.slice(1);
+  if (contentLines.length === 0) return missingField();
+  const sectionConfidence = contentLines.reduce((min, l) => Math.min(min, l.minConfidence), 1);
+  if (sectionConfidence < OCR_CONFIDENCE_THRESHOLD) return missingField();
+  return { value: false, confidence: sectionConfidence, status: 'EXTRACTED' };
 }
 
 // ---------- 발급일 ----------
@@ -258,10 +369,11 @@ export function parseRegistryOcr(fields: OcrTextField[]): RegistryOcrDraft {
   const owner = extractOwner(gapgu);
 
   return {
-    ownerNameCandidate: owner.ownerNameCandidate ?? missingField(),
+    ownerNameCandidates: owner.ownerNameCandidates ?? missingField(),
     ownerType: owner.ownerType ?? missingField(),
     seniorLienTotal: extractSeniorLienTotal(eulgu),
     hasRightsViolation: extractRightsViolation(gapgu),
+    existingLeaseholdRights: extractExistingLeaseholdRights(eulgu),
     issuedDate: extractIssuedDate(lines),
   };
 }

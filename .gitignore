@@ -30,6 +30,10 @@ yarn-error.log*
 .env.local
 .env
 
+# OCR 테스트용 실제 등기부 샘플 (개인정보 포함 가능 — 절대 커밋 금지)
+OCRsample*.jpg
+OCRsample*.pdf
+
 # vercel
 .vercel
 

@@ -50,14 +50,16 @@ export interface OcrFieldDraft<T> {
 
 /**
  * /api/ocr 응답 — 판정에 바로 쓰지 않는 "추출 후보"만 담는다.
- * ownerNameCandidate는 고객 확인 화면에서 임대인명과 비교하는 용도로만 쓰고
- * RegistryInfo/서버 저장(payload)에는 절대 포함하지 않는다.
+ * ownerNameCandidates는 고객 확인 화면에서 임대인명과 비교하는 용도로만 쓰고
+ * RegistryInfo/서버 저장(payload)에는 절대 포함하지 않는다. 공동소유(공유자)면 여러 명이 담긴다.
  */
 export interface RegistryOcrDraft {
-  ownerNameCandidate?: OcrFieldDraft<string>;
+  ownerNameCandidates?: OcrFieldDraft<string[]>;
   ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
   seniorLienTotal?: OcrFieldDraft<number>;
   hasRightsViolation?: OcrFieldDraft<boolean>;
+  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용) */
+  existingLeaseholdRights?: OcrFieldDraft<boolean>;
   issuedDate?: string;
 }
 

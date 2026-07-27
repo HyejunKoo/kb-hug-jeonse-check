@@ -58,12 +58,21 @@ export interface Property {
   fetchedAt?: string;                     // 공공API 조회시각 ISO. 명세 F-02 저장정보
 }
 
+/**
+ * 등기부 소유자와 계약 임대인 일치 여부.
+ * MATCHED_PARTIAL_CO_OWNERS: 공동소유자가 2명 이상인데 계약서엔 그중 일부만 임대인으로 기재됨
+ * — 안전/위험 판단이 아니라 "나머지 공유자 동의 여부는 공식 확인이 필요"하다는 신호로만 쓴다.
+ */
+export type OwnerMatchStatus = 'MATCHED' | 'MATCHED_PARTIAL_CO_OWNERS' | 'NOT_MATCHED';
+
 export interface RegistryInfo {
   /** 등기부 소유자와 계약 임대인이 같은 사람인지 — 실명은 저장하지 않고 결과만 저장 */
-  ownerMatch?: Field<boolean>;
+  ownerMatch?: Field<OwnerMatchStatus>;
   ownerType?: Field<'INDIVIDUAL' | 'CORPORATION'>;
   seniorLienTotal?: Field<number>;
   hasRightsViolation?: Field<boolean>;
+  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용 — 아직 자동 판정에는 쓰지 않음) */
+  existingLeaseholdRights?: Field<boolean>;
   issuedDate?: string;
 }
 

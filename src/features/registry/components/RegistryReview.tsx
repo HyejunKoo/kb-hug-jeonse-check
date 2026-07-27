@@ -2,12 +2,15 @@
 // src/features/registry/components/RegistryReview.tsx — 등기부 OCR 추출 → 고객 확인 (F03/F04, 2번 담당)
 // 흐름: 파일 업로드 → /api/ocr 로 "추출 후보"만 받음 → 고객이 화면에서 확인·수정 →
 //       확인 완료 시에만 RegistryInfo(USER_CONFIRMED_DOCUMENT)를 만들어 상위로 전달한다.
-// 절대 규칙: 소유자 실명(ownerNameCandidate)과 임대인명은 이 컴포넌트 밖으로 나가지 않는다.
+// 절대 규칙: 소유자 실명(ownerNameCandidates)과 임대인명은 이 컴포넌트 밖으로 나가지 않는다.
 import { useRef, useState } from 'react';
-import type { OcrErrorResponse, OcrFieldStatus, OcrResponse, RegistryInfo, RegistryOcrDraft } from '@/types';
+import type {
+  OcrErrorResponse, OcrFieldStatus, OcrResponse, OwnerMatchStatus, RegistryInfo, RegistryOcrDraft,
+} from '@/types';
 import { Row, Toggle } from '@/features/intake/components/fields';
 
 type YesNoUnknown = 'YES' | 'NO' | 'UNKNOWN';
+type OwnerMatchChoice = OwnerMatchStatus | 'UNKNOWN';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -55,10 +58,14 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
   // 고객 확인/수정 상태
   const [landlordName, setLandlordName] = useState('');
   const [ownerType, setOwnerType] = useState<'INDIVIDUAL' | 'CORPORATION' | 'UNKNOWN'>('UNKNOWN');
-  const [ownerMatch, setOwnerMatch] = useState<YesNoUnknown>('UNKNOWN');
+  const [ownerMatch, setOwnerMatch] = useState<OwnerMatchChoice>('UNKNOWN');
   const [rightsViolation, setRightsViolation] = useState<YesNoUnknown>('UNKNOWN');
+  const [leaseholdRights, setLeaseholdRights] = useState<YesNoUnknown>('UNKNOWN');
   const [lienKnown, setLienKnown] = useState(false);
   const [lienAmount, setLienAmount] = useState('');
+
+  const ownerNames = draft?.ownerNameCandidates?.value ?? [];
+  const hasCoOwners = ownerNames.length >= 2;
 
   /** 확인되지 않은 상태로 되돌아갈 때는 항상 부모의 확정값도 함께 지운다 — 이전 확인값이 그대로 판정에 남는 것을 막기 위함 */
   function clearConfirmed() {
@@ -74,6 +81,7 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
     setOwnerType('UNKNOWN');
     setOwnerMatch('UNKNOWN');
     setRightsViolation('UNKNOWN');
+    setLeaseholdRights('UNKNOWN');
     setLienKnown(false);
     setLienAmount('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -102,9 +110,15 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
       const data = (await res.json()) as OcrResponse;
       setDraft(data.draft);
       setOwnerType(data.draft.ownerType?.status !== 'MISSING' && data.draft.ownerType?.value ? data.draft.ownerType.value : 'UNKNOWN');
+      setOwnerMatch('UNKNOWN');
       setRightsViolation(
         data.draft.hasRightsViolation?.status !== 'MISSING' && data.draft.hasRightsViolation?.value !== undefined
           ? (data.draft.hasRightsViolation.value ? 'YES' : 'NO')
+          : 'UNKNOWN',
+      );
+      setLeaseholdRights(
+        data.draft.existingLeaseholdRights?.status !== 'MISSING' && data.draft.existingLeaseholdRights?.value !== undefined
+          ? (data.draft.existingLeaseholdRights.value ? 'YES' : 'NO')
           : 'UNKNOWN',
       );
       if (data.draft.seniorLienTotal?.status !== 'MISSING' && data.draft.seniorLienTotal?.value !== undefined) {
@@ -127,10 +141,13 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
       registry.ownerType = { value: ownerType, source: 'USER_CONFIRMED_DOCUMENT' };
     }
     if (ownerMatch !== 'UNKNOWN') {
-      registry.ownerMatch = { value: ownerMatch === 'YES', source: 'USER_CONFIRMED_DOCUMENT' };
+      registry.ownerMatch = { value: ownerMatch, source: 'USER_CONFIRMED_DOCUMENT' };
     }
     if (rightsViolation !== 'UNKNOWN') {
       registry.hasRightsViolation = { value: rightsViolation === 'YES', source: 'USER_CONFIRMED_DOCUMENT' };
+    }
+    if (leaseholdRights !== 'UNKNOWN') {
+      registry.existingLeaseholdRights = { value: leaseholdRights === 'YES', source: 'USER_CONFIRMED_DOCUMENT' };
     }
     if (lienKnown && lienAmount.trim() !== '' && Number.isFinite(Number(lienAmount))) {
       registry.seniorLienTotal = { value: Number(lienAmount), source: 'USER_CONFIRMED_DOCUMENT' };
@@ -144,12 +161,19 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
     onConfirmed(buildRegistry());
   }
 
-  const nameHint =
-    draft?.ownerNameCandidate?.value && landlordName.trim()
-      ? normalizeName(draft.ownerNameCandidate.value) === normalizeName(landlordName)
+  const nameHint = (() => {
+    if (ownerNames.length === 0 || !landlordName.trim()) return '';
+    const target = normalizeName(landlordName);
+    const matched = ownerNames.some((n) => normalizeName(n) === target);
+    if (!hasCoOwners) {
+      return matched
         ? '입력하신 임대인명과 등기부상 소유자 표기가 비슷합니다. 직접 대조 후 선택해 주세요.'
-        : '입력하신 임대인명과 등기부상 소유자 표기가 달라 보입니다. 직접 대조 후 선택해 주세요.'
-      : '';
+        : '입력하신 임대인명과 등기부상 소유자 표기가 달라 보입니다. 직접 대조 후 선택해 주세요.';
+    }
+    return matched
+      ? `등기부상 공동소유자 ${ownerNames.length}명 중 한 명과 표기가 비슷합니다. 계약서에 나머지 공유자도 임대인으로 기재돼 있는지 직접 확인해 주세요.`
+      : `등기부상 공동소유자 ${ownerNames.length}명 중 표기가 일치하는 사람이 안 보입니다. 직접 대조 후 선택해 주세요.`;
+  })();
 
   return (
     <div className="space-y-3">
@@ -211,6 +235,11 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
                   등기부상 소유자 유형 <StatusBadge status={draft.ownerType?.status} />
                 </span>
               }
+              hint={
+                ownerNames.length > 0
+                  ? `등기부상 소유자 후보 (${ownerNames.length}명, 참고용 · 저장되지 않음): ${ownerNames.join(', ')}${hasCoOwners ? ' — 공동소유(공유자)입니다.' : ''}`
+                  : undefined
+              }
             >
               <select className="inp" value={ownerType} onChange={(e) => setOwnerType(e.target.value as typeof ownerType)}>
                 <option value="UNKNOWN">모름 / 확인 안 됨</option>
@@ -233,11 +262,17 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
 
             {nameHint && <p className="text-xs text-amber-700">{nameHint}</p>}
 
-            <Row label="등기부 소유자와 계약 임대인이 동일인입니까?">
-              <select className="inp" value={ownerMatch} onChange={(e) => setOwnerMatch(e.target.value as YesNoUnknown)}>
+            <Row
+              label="등기부 소유자와 계약 임대인이 동일인입니까?"
+              hint={hasCoOwners ? '공동소유(공유자) 등기부입니다 — 계약서에 일부 공유자만 임대인으로 기재돼 있다면 "일부만 일치"를 선택하세요.' : undefined}
+            >
+              <select className="inp" value={ownerMatch} onChange={(e) => setOwnerMatch(e.target.value as OwnerMatchChoice)}>
                 <option value="UNKNOWN">모름 / 확인 안 됨</option>
-                <option value="YES">예, 동일인입니다</option>
-                <option value="NO">아니요, 다릅니다</option>
+                <option value="MATCHED">예, 동일인입니다</option>
+                {hasCoOwners && (
+                  <option value="MATCHED_PARTIAL_CO_OWNERS">공동소유자 중 일부만 임대인으로 기재됨</option>
+                )}
+                <option value="NOT_MATCHED">아니요, 다릅니다</option>
               </select>
             </Row>
 
@@ -276,6 +311,29 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
                 className="inp"
                 value={rightsViolation}
                 onChange={(e) => setRightsViolation(e.target.value as YesNoUnknown)}
+              >
+                <option value="UNKNOWN">모름 / 확인 안 됨</option>
+                <option value="NO">없음</option>
+                <option value="YES">있음</option>
+              </select>
+            </Row>
+
+            <Row
+              label={
+                <span className="inline-flex items-center gap-2">
+                  기존 전세권·임차권 등 등록된 권리 <StatusBadge status={draft.existingLeaseholdRights?.status} />
+                </span>
+              }
+              hint={
+                draft.existingLeaseholdRights?.evidence
+                  ? `인식된 문구: ${draft.existingLeaseholdRights.evidence} — 금액·존속기간은 자동 계산하지 않으니 원문을 직접 확인해 주세요.`
+                  : '을구에 남아있는 다른 세입자의 전세권 등은 근저당과 별개로 우선순위에 영향을 줄 수 있습니다.'
+              }
+            >
+              <select
+                className="inp"
+                value={leaseholdRights}
+                onChange={(e) => setLeaseholdRights(e.target.value as YesNoUnknown)}
               >
                 <option value="UNKNOWN">모름 / 확인 안 됨</option>
                 <option value="NO">없음</option>
