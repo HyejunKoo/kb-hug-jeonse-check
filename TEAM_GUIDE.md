@@ -69,7 +69,7 @@ src/
 │  ├─ page.tsx                  랜딩
 │  ├─ diagnosis/page.tsx        진단 플로우 4단계   ← 공용. 수정 시 아래 "충돌 주의" 참고
 │  ├─ diagnosis/result/         저장된 진단 이력 목록·상세         · 2번 ✅
-│  ├─ login/                    Supabase Auth 이메일 매직링크/OTP  · 2번 ✅
+│  ├─ login/, signup/           Supabase Auth 이메일+비밀번호 (가입 시 1회 이메일 인증) · 2번 ✅
 │  ├─ auth/confirm, auth/signout  Auth 콜백·로그아웃              · 2번 ✅
 │  └─ api/
 │     ├─ address/route.ts       주소 후보 검색                   · 1번 ✅
@@ -226,13 +226,21 @@ cp .env.example .env.local     # 그리고 키 채우기
 노션 페이지도 외부 공유하지 말 것 — 특히 `SUPABASE_SERVICE_ROLE_KEY`는 RLS를 우회하는
 관리자 권한 키라 유출되면 DB 전체가 열린다.
 
-### 로그인(매직링크) 쓰려면 Supabase 대시보드 설정도 필요
+### 로그인은 이메일+비밀번호. 회원가입 때만 Supabase 대시보드 설정 필요
+
+로그인(`/login`)은 `signInWithPassword`라 이메일 발송이 전혀 없다. 이메일 인증은
+**회원가입(`/signup`)** 시 1회만 발생한다.
 
 `supabase/schema.sql`을 최신 상태로 다시 실행(`user_id`+RLS 정책 추가분)한 뒤,
-**Auth → Email Templates → Magic Link**의 `{{ .ConfirmationURL }}`을
-`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` 형태로 바꿔야
-`/login`에서 보낸 메일의 링크가 실제로 로그인까지 이어진다. 안 바꿔도 메일 속 6자리 코드
-입력으로는 로그인 가능하다.
+**Auth → Email Templates → Confirm signup**의 `{{ .ConfirmationURL }}`을
+`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup` 형태로 바꿔야 한다.
+기본 템플릿(`{{ .ConfirmationURL }}` 그대로)은 Supabase 호스팅 verify 엔드포인트를 거쳐
+해시 프래그먼트(`#access_token=...`)로 세션을 돌려주는 implicit flow라 우리 서버 라우트
+(`/auth/confirm`)를 아예 타지 않는다 — 인증 메일을 클릭해도 로그인이 안 되면 이 템플릿부터 확인할 것.
+
+**Auth → URL Configuration → Redirect URLs**에 배포 도메인(`https://<배포주소>/auth/confirm`)이
+등록돼 있어야 한다. 로컬 개발용 `http://localhost:3000/auth/confirm`도 같이 등록해두면
+로컬·배포 둘 다 된다.
 
 ---
 
