@@ -1,7 +1,10 @@
 -- Supabase SQL Editor에 붙여넣어 실행 (최소 저장 원칙: 실명·주민번호 등 저장 금지)
 
--- 종합 판정 상태 enum
-create type overall_status as enum ('pass', 'fail', 'insufficient', 'needs_review');
+-- 종합 판정 상태 enum (CREATE TYPE은 IF NOT EXISTS를 지원하지 않아 DO 블록으로 감싼다)
+do $$ begin
+  create type overall_status as enum ('pass', 'fail', 'insufficient', 'needs_review');
+exception when duplicate_object then null;
+end $$;
 
 create table if not exists diagnosis_cases (
   id uuid primary key default gen_random_uuid(),

@@ -203,7 +203,7 @@ cp .env.example .env.local     # 그리고 키 채우기
 | `JUSO_API_KEY` | 주소 검색 | 노션 |
 | `BUILDING_API_KEY` | 건축HUB 건축물대장 조회 | 노션 |
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 진단 결과 저장 | 노션 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 로그인(Auth)·본인 이력 조회 | 노션 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인(Auth)·본인 이력 조회 (Supabase 새 키 체계의 publishable key) | 노션 |
 | `GEMINI_API_KEY` | 상담 요약 문장 다듬기 | ⬜ **미발급** — 없어도 동작함 |
 
 `GEMINI_API_KEY`는 아직 발급 전이라 `.env.local`에 비워두면 된다.
