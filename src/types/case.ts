@@ -59,7 +59,8 @@ export interface Property {
 }
 
 export interface RegistryInfo {
-  ownerName?: Field<string>;
+  /** 등기부 소유자와 계약 임대인이 같은 사람인지 — 실명은 저장하지 않고 결과만 저장 */
+  ownerMatch?: Field<boolean>;
   ownerType?: Field<'INDIVIDUAL' | 'CORPORATION'>;
   seniorLienTotal?: Field<number>;
   hasRightsViolation?: Field<boolean>;

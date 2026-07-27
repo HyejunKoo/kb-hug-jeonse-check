@@ -120,6 +120,15 @@
       "effectiveFrom": "2026-07-01"
     },
     {
+      "ruleId": "HUG-OWNER-MATCH",
+      "layer": "GUARANTEE",
+      "path": "KB_STAR_HUG",
+      "label": "등기부 소유자·계약 임대인 일치",
+      "checkId": "checkOwnerMatch",
+      "sourceUrl": "https://www.khug.or.kr",
+      "effectiveFrom": "2026-07-01"
+    },
+    {
       "ruleId": "HUG-SENIOR-LIEN",
       "layer": "GUARANTEE",
       "path": "KB_STAR_HUG",

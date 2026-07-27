@@ -1,20 +1,80 @@
-// src/app/diagnosis/result/page.tsx — [MVP 이후] 저장된 진단 건 결과 페이지
-// 현재 MVP는 /diagnosis 안에서 결과를 인라인 표시한다.
-// Supabase Auth + 진단 건 저장(2번 담당)이 붙으면 여기서 case id로 조회해 렌더링.
+// src/app/diagnosis/result/page.tsx — 로그인 사용자의 저장된 진단 이력 목록
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getServerSupabase } from '@/lib/supabase/server';
+import type { PathResult } from '@/types';
 
-export default function ResultPlaceholder() {
+const BLOCKED_KO: Record<PathResult['blockedAt'], string> = {
+  NONE: '막힌 단계 없음',
+  PRODUCT: '1층 · KB 상품요건에서 막힘',
+  GUARANTEE: '2층 · HUG 보증요건에서 막힘',
+  INSUFFICIENT: '자료 부족으로 판정 보류',
+};
+
+const BLOCKED_TONE: Record<PathResult['blockedAt'], string> = {
+  NONE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  PRODUCT: 'bg-red-50 text-red-700 border-red-200',
+  GUARANTEE: 'bg-red-50 text-red-700 border-red-200',
+  INSUFFICIENT: 'bg-amber-50 text-amber-700 border-amber-200',
+};
+
+export default async function ResultListPage() {
+  const supabase = getServerSupabase();
+  if (!supabase) redirect('/login');
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data, error } = await supabase
+    .from('diagnosis_cases')
+    .select('id, created_at, result, rule_version')
+    .order('created_at', { ascending: false });
+
+  const cases = (data ?? []) as { id: string; created_at: string; result: PathResult; rule_version: string }[];
+
   return (
-    <main className="mx-auto max-w-md px-4 py-16 sm:px-6">
-      <div className="card card-body text-center">
-        <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-lg">📄</span>
-        <h1 className="mt-4 text-lg font-bold tracking-tight">저장된 진단 결과</h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">
-          로그인·진단 이력 기능과 함께 제공될 예정입니다.
-          <br />지금은 사전점검 화면에서 결과를 바로 확인하세요.
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <header className="mb-6">
+        <p className="eyebrow">내 이력</p>
+        <h1 className="mt-2 text-xl font-bold tracking-tight">저장된 진단 결과</h1>
+        <p className="mt-2 text-sm text-slate-500">로그인 후 실행한 사전점검만 저장됩니다.</p>
+      </header>
+
+      {error && (
+        <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          이력을 불러오지 못했습니다: {error.message}
         </p>
-        <Link href="/diagnosis" className="btn-main mt-6 w-full">사전점검으로 이동</Link>
-      </div>
+      )}
+
+      {!error && cases.length === 0 && (
+        <div className="card card-body text-center">
+          <p className="text-sm text-slate-500">아직 저장된 진단 결과가 없습니다.</p>
+          <Link href="/diagnosis" className="btn-main mt-4 inline-flex">사전점검 시작</Link>
+        </div>
+      )}
+
+      <ul className="space-y-2.5">
+        {cases.map((c) => (
+          <li key={c.id}>
+            <Link
+              href={`/diagnosis/result/${c.id}`}
+              className="card card-body block transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{c.result.pathLabel}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {new Date(c.created_at).toLocaleString('ko-KR')} · 규칙팩 {c.rule_version}
+                  </p>
+                </div>
+                <span className={`badge ${BLOCKED_TONE[c.result.blockedAt]}`}>
+                  {BLOCKED_KO[c.result.blockedAt]}
+                </span>
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }

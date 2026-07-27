@@ -28,7 +28,10 @@ export function runRulePack(diag: DiagnosisCase, pack: RulePack): PathResult {
 
   const unmetProduct = results.some(r => r.layer === 'PRODUCT' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
   const unmetGuarantee = results.some(r => r.layer === 'GUARANTEE' && r.verdict === 'PUBLIC_REQUIREMENT_UNMET');
-  const blockedAt = unmetProduct ? 'PRODUCT' : unmetGuarantee ? 'GUARANTEE' : 'NONE';
+  const hasMissingInfo = results.some(r => r.verdict === 'MISSING_INFORMATION');
+  // 요건 미충족이 확인되면 그게 우선이고, 위반은 없지만 자료가 부족하면 "판정 보류"로 요약한다.
+  // (전에는 자료 부족이 있어도 항상 NONE으로 떨어져 요약 배너가 "막힌 단계 없음"으로 잘못 보였다.)
+  const blockedAt = unmetProduct ? 'PRODUCT' : unmetGuarantee ? 'GUARANTEE' : hasMissingInfo ? 'INSUFFICIENT' : 'NONE';
 
   return {
     path: 'KB_STAR_HUG',

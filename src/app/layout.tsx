@@ -1,13 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import './globals.css';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
   title: 'KB 전세 코파일럿 | 계약 전 사전점검',
   description: '계약금 지급 전, 공개요건 기준 사전점검',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const supabase = getServerSupabase();
+  const user = supabase ? (await supabase.auth.getUser()).data.user : null;
+
   return (
     <html lang="ko">
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
@@ -24,6 +28,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="flex items-center gap-1">
               <Link href="/diagnosis" className="btn-ghost">사전점검</Link>
+              {user ? (
+                <>
+                  <Link href="/diagnosis/result" className="btn-ghost">저장 이력</Link>
+                  <span className="hidden max-w-[10rem] truncate px-1 text-xs text-slate-400 sm:inline">
+                    {user.email}
+                  </span>
+                  <form action="/auth/signout" method="post">
+                    <button type="submit" className="btn-ghost">로그아웃</button>
+                  </form>
+                </>
+              ) : (
+                <Link href="/login" className="btn-ghost">로그인</Link>
+              )}
             </nav>
           </div>
         </header>

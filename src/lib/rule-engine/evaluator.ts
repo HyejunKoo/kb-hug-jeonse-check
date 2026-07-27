@@ -191,6 +191,25 @@ const checkNoRightsViolation: Checker = (c) => {
   };
 };
 
+const checkOwnerMatch: Checker = (c) => {
+  const f = c.registry?.ownerMatch;
+  if (f === undefined) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '등기부상 소유자와 계약 임대인이 같은 사람인지 확인되지 않음',
+      usedValues: [],
+      nextAction: '등기부를 업로드해 소유자명과 임대인명이 같은지 확인해 주세요.',
+    };
+  }
+  const ok = f.value === true;
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok ? '등기부 소유자와 계약 임대인이 일치함' : '등기부 소유자와 계약 임대인이 일치하지 않음',
+    usedValues: ['소유자·임대인 일치 여부 (고객확인문서)'],
+    nextAction: ok ? '' : '임대인이 실제 소유자가 맞는지, 대리 계약이라면 위임장·인감증명서를 갖추었는지 확인하세요.',
+  };
+};
+
 const checkSeniorLienRatio: Checker = (c) => {
   const lien = c.registry?.seniorLienTotal;
   if (lien === undefined) {
@@ -304,6 +323,7 @@ export const CHECKERS: Record<string, Checker> = {
   checkNotIllegalBuilding,
   checkMultiFamilyRisk,
   checkNoRightsViolation,
+  checkOwnerMatch,
   checkSeniorLienRatio,
   alwaysPostContract,
   alwaysOfficialReview,

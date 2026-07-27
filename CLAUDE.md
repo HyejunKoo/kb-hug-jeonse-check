@@ -25,8 +25,9 @@
 ```
 src/app/page.tsx                  랜딩
 src/app/diagnosis/page.tsx        진단 플로우 4단계 (결과 인라인 표시)
-src/app/diagnosis/result/         [MVP 이후] 저장된 진단 조회
-src/app/login/                    [MVP 이후] Supabase Auth (2번)
+src/app/diagnosis/result/         저장된 진단 이력 목록·상세 (2번, 로그인 필요)
+src/app/login/                    Supabase Auth 이메일 매직링크/OTP 로그인 (2번)
+src/app/auth/confirm, /auth/signout  Auth 콜백·로그아웃 라우트 (2번)
 src/app/api/check/route.ts        판정 실행 + 저장 (후속 에이전트)
 src/app/api/building/route.ts     건축HUB 조회 — TODO 실제 호출 (1번)
 src/app/api/ocr/route.ts          등기부 추출 — 현재 샘플 (2번)
@@ -38,7 +39,8 @@ src/features/registry/            등기부 parser·확인 UI (2번)
 src/features/result/              formatter·ResultCard (후속 에이전트)
 src/lib/rule-engine/              index=엔진, evaluator=체크 함수 (3번)
 src/lib/crawlers/                 kb·hug 크롤러 + rule-provider(폴백·캐시) (3번)
-src/lib/supabase/                 server(service_role)·client(anon, MVP이후)
+src/lib/supabase/                 server(getSupabaseAdmin=service_role, getServerSupabase=요청자 세션)·client(브라우저 anon)
+src/middleware.ts                 Supabase 세션 쿠키 갱신
 src/lib/gemini/client.ts          Gemini 초기화
 src/types/                        case·rule·api + index 배럴. `@/types`로 import
 src/rules/kb-hug.json             규칙팩 폴백 (3번 검수)
@@ -73,7 +75,11 @@ supabase/schema.sql               DB 스키마
 
 ## API 계약 (프론트-백 이 형태 유지)
 
-- `POST /api/check`  body: DiagnosisCase → `{ pathResult, ruleVersion, ruleSource }`\n- `GET /api/rules` → 현재 적용 규칙팩 (version·source·rules[])
+- `POST /api/check`  body: DiagnosisCase → `{ pathResult, ruleVersion, ruleSource, caseId? }` (caseId는 로그인 사용자만)
+- `GET /api/cases` (로그인 필수) → `{ cases: CaseSummary[] }` 본인 이력만
+- `GET /api/cases/[id]` (로그인 필수) → `CaseDetailResponse` 본인 진단 1건
+- `DELETE /api/cases/[id]` (로그인 필수) → `{ ok: true }` 본인 진단 1건 삭제
+- `GET /api/rules` → 현재 적용 규칙팩 (version·source·rules[])
 - `POST /api/building` body: `{ address }` → `{ property: Property, ... }`
 - `POST /api/ocr` (추후 FormData PDF) → `{ registry: RegistryInfo }` — 추출값은 고객 확인 후에만 판정에 사용
 - `POST /api/report` body: `{ pathResult }` → `{ report: string, llm: boolean }`
@@ -95,6 +101,9 @@ supabase/schema.sql               DB 스키마
 
 ## 현재 상태 / TODO
 
+- [완료-2번] Supabase Auth 이메일 매직링크/OTP 로그인, `/diagnosis/result`(+`[id]`) 이력 조회·삭제,
+  `diagnosis_cases`에 `user_id`+RLS 추가. 비로그인은 여전히 사전점검 가능하나 결과 미저장.
+  Supabase 대시보드에서 이메일 템플릿의 ConfirmationURL을 `/auth/confirm?token_hash=...&type=email` 형태로 바꿔야 매직링크가 동작함
 - [완료] 빌드 통과, /api/check 판정 동작 검증됨, GitHub 원격 연결(HyejunKoo/kb-hug-jeonse-check)
 - [완료-1번] `app/api/address` + `app/api/building` + `features/building/mapper.ts`: 주소검색→행정코드→건축HUB 표제부 실연동. 위반건축물은 공개 API 미제공이라 영구 자료 부족 처리
 - [완료] UI 개편: 디자인 토큰(`kb-*` 팔레트)·스테퍼·결과 카드. `tailwind.config.ts` 수정 시 dev 서버 재시작 필요

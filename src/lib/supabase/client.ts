@@ -1,11 +1,13 @@
-// src/lib/supabase/client.ts — 브라우저용 (anon 키)
-// [MVP 이후] Supabase Auth 로그인 + 매물 여러 건 저장 시 사용 (2번 담당)
-// 지금은 사용하는 곳 없음. RLS로 anon 접근은 차단되어 있음.
-import { createClient } from '@supabase/supabase-js';
+// src/lib/supabase/client.ts — 브라우저용 (anon 키, RLS 적용)
+// Supabase Auth 로그인(매직링크/OTP)·로그아웃 등 클라이언트 상호작용에서만 사용.
+// 진단 데이터 조회/저장은 서버(lib/supabase/server.ts)에서만 한다.
+import { createBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export function getBrowserSupabase() {
+/** env가 비어 있으면 null — 호출부에서 "Supabase 미설정" 처리 */
+export function getBrowserSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return null;
-  return createClient(url, anon);
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) return null;
+  return createBrowserClient(url, key);
 }
