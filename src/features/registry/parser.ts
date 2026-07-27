@@ -134,6 +134,12 @@ const CANCELLED_RE = looseRe('말소');
 // 공유자 목록(지분·이름·주민번호·주소가 여러 줄 반복)을 다 담기 위해 넉넉한 창을 쓴다.
 // 그다음 항목(등기명의인표시 변경 등)까지 넘어가도 주민번호가 바로 붙은 토큰만 뽑으므로 오탐 위험은 낮다.
 const OWNER_LIST_WINDOW = 10;
+// 공동소유는 문서 형식에 따라 키워드가 한 번만("공유자" 뒤에 여러 명 나열)이거나, 사람마다
+// 반복("공유자 A" ... "공유자 B")될 수 있다. 이 간격 이내로 붙어있는 키워드들은 같은 등록
+// 건(공동소유)으로 보고 전부 묶는다 — 단, 그 사이에 새 등록 건 표시(소유권이전 등)가 있으면
+// 묶지 않는다 (과거 소유자를 현재 소유자와 합치는 것을 막기 위함).
+const OWNER_GROUP_GAP = 6;
+const OWNERSHIP_EVENT_RE = /소유권\s*(일부\s*)?이전|소유권\s*보존/;
 
 function extractOwner(gapgu: Line[]): {
   ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
@@ -141,32 +147,40 @@ function extractOwner(gapgu: Line[]): {
 } {
   // 갑구는 접수 순서(순위번호)대로 나열되므로, 소유권 이전 이력이 있으면 소유자 표기가
   // 여러 번 등장한다. 가장 마지막(=가장 최근) 항목이 현재 소유자일 가능성이 높다.
-  let idx = -1;
-  for (let i = gapgu.length - 1; i >= 0; i -= 1) {
-    if (OWNER_KEYWORD_RE.test(gapgu[i].text)) { idx = i; break; }
-  }
-  if (idx === -1) return {};
+  const keywordIdxs: number[] = [];
+  gapgu.forEach((l, i) => { if (OWNER_KEYWORD_RE.test(l.text)) keywordIdxs.push(i); });
+  if (keywordIdxs.length === 0) return {};
 
-  const shortWindowLines = gapgu.slice(idx, idx + 3);
-  const shortWindowText = shortWindowLines.map((l) => l.text).join(' ');
-  const confidence = Math.min(...shortWindowLines.map((l) => l.minConfidence));
+  const lastIdx = keywordIdxs[keywordIdxs.length - 1];
+  let clusterStart = lastIdx;
+  for (let k = keywordIdxs.length - 2; k >= 0; k -= 1) {
+    const candidateIdx = keywordIdxs[k];
+    if (clusterStart - candidateIdx > OWNER_GROUP_GAP) break;
+    const between = gapgu.slice(candidateIdx + 1, clusterStart);
+    if (between.some((l) => OWNERSHIP_EVENT_RE.test(l.text))) break; // 그 사이에 새 등록 건이 시작됨
+    clusterStart = candidateIdx;
+  }
+
+  const windowEnd = Math.min(gapgu.length, lastIdx + OWNER_LIST_WINDOW);
+  const windowLines = gapgu.slice(clusterStart, windowEnd);
+  const windowText = windowLines.map((l) => l.text).join(' ');
+  const confidence = Math.min(...windowLines.map((l) => l.minConfidence));
   const status = statusOf(confidence);
 
-  if (CORP_MARKER_RE.test(shortWindowText)) {
-    const m = shortWindowText.match(new RegExp(`[가-힣A-Za-z()㈜]{0,20}${CORP_MARKER_RE.source}[가-힣A-Za-z()㈜]{0,10}`));
+  if (CORP_MARKER_RE.test(windowText)) {
+    const m = windowText.match(new RegExp(`[가-힣A-Za-z()㈜]{0,20}${CORP_MARKER_RE.source}[가-힣A-Za-z()㈜]{0,10}`));
     return {
       ownerType: { value: 'CORPORATION', confidence, status },
       ownerNameCandidates: m ? { value: [m[0].trim()], confidence, status, evidence: m[0].trim() } : missingField(),
     };
   }
 
-  // 공유자는 이름이 여러 번(지분별로) 나오므로 넓은 창에서 "이름+주민번호" 패턴을 전부 모은다.
-  const listWindowLines = gapgu.slice(idx, Math.min(gapgu.length, idx + OWNER_LIST_WINDOW));
-  const listWindowText = listWindowLines.map((l) => l.text).join(' ');
+  // 공유자는 이름이 여러 번(지분별로 또는 사람마다) 나오므로 클러스터 전체에서
+  // "이름+주민번호" 패턴을 전부 모은다.
   const names: string[] = [];
-  let m: RegExpExecArray | null;
   const re = new RegExp(NAME_WITH_REGNUM_RE.source, 'g');
-  while ((m = re.exec(listWindowText)) !== null) {
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(windowText)) !== null) {
     if (!names.includes(m[1])) names.push(m[1]);
   }
 
@@ -177,13 +191,20 @@ function extractOwner(gapgu: Line[]): {
     };
   }
 
-  // 주민번호가 인식되지 않은 경우의 대비책 — 키워드 바로 뒤 한글 이름 후보 하나만이라도 잡는다.
-  const afterKeyword = shortWindowText.replace(new RegExp(`^[\\s\\S]*?${OWNER_KEYWORD_RE.source}`), '');
-  const fallbackName = afterKeyword.match(KOREAN_NAME_RE)?.[0];
-  if (fallbackName) {
+  // 주민번호가 인식되지 않은 경우의 대비책 — 클러스터 안 키워드 각각의 바로 뒤 한글 이름
+  // 후보를 모은다 (키워드가 사람마다 반복되는 형식이면 이 경로로 여러 명이 모두 잡힌다).
+  const fallbackNames: string[] = [];
+  for (const kIdx of keywordIdxs) {
+    if (kIdx < clusterStart) continue;
+    const seg = gapgu.slice(kIdx, Math.min(gapgu.length, kIdx + 3)).map((l) => l.text).join(' ');
+    const after = seg.replace(new RegExp(`^[\\s\\S]*?${OWNER_KEYWORD_RE.source}`), '');
+    const name = after.match(KOREAN_NAME_RE)?.[0];
+    if (name && !fallbackNames.includes(name)) fallbackNames.push(name);
+  }
+  if (fallbackNames.length > 0) {
     return {
       ownerType: { value: 'INDIVIDUAL', confidence, status },
-      ownerNameCandidates: { value: [fallbackName], confidence, status, evidence: fallbackName },
+      ownerNameCandidates: { value: fallbackNames, confidence, status, evidence: fallbackNames.join(', ') },
     };
   }
   return { ownerType: missingField() };
