@@ -35,7 +35,9 @@ export default function SignupPage() {
       const { data, error: err } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+        // 기본 Confirm signup 템플릿은 세션을 URL 해시로 돌려주는 implicit flow라
+        // 서버 라우트가 아니라 /login(클라이언트)이 착지점이어야 한다.
+        options: { emailRedirectTo: `${window.location.origin}/login` },
       });
       if (err) {
         setError(friendlyError(err.message));
