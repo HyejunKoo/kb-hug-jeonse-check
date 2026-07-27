@@ -2,7 +2,7 @@
 'use client';
 
 export function Row({ label, hint, required, children }: {
-  label: string; hint?: React.ReactNode; required?: boolean; children: React.ReactNode;
+  label: React.ReactNode; hint?: React.ReactNode; required?: boolean; children: React.ReactNode;
 }) {
   return (
     <div>

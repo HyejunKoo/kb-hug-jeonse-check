@@ -13,6 +13,7 @@ import { toDiagnosisCase } from '@/features/intake/mapper';
 import { searchAddress, fetchBuildingInfo } from '@/features/building/client';
 import type { JusoItem } from '@/features/building/mapper';
 import { Row, Toggle, Nav } from '@/features/intake/components/fields';
+import { RegistryReview } from '@/features/registry/components/RegistryReview';
 import { ResultCard } from '@/features/result/components/ResultCard';
 import { VERDICT_KO, VERDICT_BADGE, VERDICT_DESC } from '@/features/result/formatter';
 
@@ -61,7 +62,7 @@ export default function DiagnosisPage() {
 
   async function onSearch() {
     if (!query.trim()) return;
-    setLoading(true); setSearched(true); setSelected(null); setProperty({ address: '' });
+    setLoading(true); setSearched(true); setSelected(null); setProperty({ address: '' }); setRegistry(undefined);
     try {
       const { candidates: list, notes: n } = await searchAddress(query);
       setCandidates(list); setNotes(n);
@@ -69,19 +70,11 @@ export default function DiagnosisPage() {
   }
 
   async function onSelect(j: JusoItem) {
-    setSelected(j); setLoading(true);
+    setSelected(j); setLoading(true); setRegistry(undefined);
     try {
       const r = await fetchBuildingInfo(j);
       if (r.property) setProperty(r.property);
       setNotes(r.notes);
-    } finally { setLoading(false); }
-  }
-
-  async function onFetchOcrSample() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/ocr', { method: 'POST' });
-      setRegistry((await res.json()).registry);
     } finally { setLoading(false); }
   }
 
@@ -418,35 +411,8 @@ export default function DiagnosisPage() {
                   </ul>
                 )}
 
-                <Row label="등기부 (샘플)" hint="현재는 샘플 데이터입니다. 추출값은 고객 확인 후에만 판정에 사용합니다.">
-                  <button className="btn-sub" onClick={onFetchOcrSample} disabled={loading}>
-                    샘플 등기부 불러오기
-                  </button>
-                </Row>
-
-                {registry && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-bold text-slate-900">추출 결과 — 판정 전 반드시 확인·수정하세요</p>
-                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
-                      <div>
-                        <dt className="text-slate-400">소유자</dt>
-                        <dd className="mt-0.5 font-semibold text-slate-700">{registry.ownerName?.value}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-400">근저당 합계</dt>
-                        <dd className="mt-0.5 font-semibold tabular-nums text-slate-700">
-                          {(Number(registry.seniorLienTotal?.value) / 100000000).toFixed(1)}억
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-400">권리침해</dt>
-                        <dd className={`mt-0.5 font-semibold ${registry.hasRightsViolation?.value ? 'text-red-600' : 'text-slate-700'}`}>
-                          {registry.hasRightsViolation?.value ? '있음' : '없음'}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                )}
+                {/* 매물(주소)이 바뀌면 이전 문서에 대한 확인 상태를 이어받지 않도록 완전히 새로 마운트한다 */}
+                <RegistryReview key={property.address || 'no-property'} onConfirmed={setRegistry} />
 
                 <Nav onPrev={() => setStep(1)} onNext={onRunCheck}
                   nextLabel={loading ? '판정 중…' : '사전점검 실행'} disabled={loading} />

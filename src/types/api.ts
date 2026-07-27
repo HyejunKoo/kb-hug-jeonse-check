@@ -37,6 +37,41 @@ export interface CheckResponse {
 
 export interface BuildingRequest { address: string; }
 
+// ---- /api/ocr (F03 등기부 추출) ----
+/** OCR 추출 신뢰도 상태. LOW_CONFIDENCE 기준값은 0.85 (features/registry/parser.ts OCR_CONFIDENCE_THRESHOLD) */
+export type OcrFieldStatus = 'EXTRACTED' | 'LOW_CONFIDENCE' | 'MISSING';
+
+export interface OcrFieldDraft<T> {
+  value?: T;
+  confidence: number; // MISSING이면 0
+  status: OcrFieldStatus;
+  evidence?: string;  // 판단 근거가 된 원문 일부 (짧은 스니펫만, 문서 전체 미포함)
+}
+
+/**
+ * /api/ocr 응답 — 판정에 바로 쓰지 않는 "추출 후보"만 담는다.
+ * ownerNameCandidate는 고객 확인 화면에서 임대인명과 비교하는 용도로만 쓰고
+ * RegistryInfo/서버 저장(payload)에는 절대 포함하지 않는다.
+ */
+export interface RegistryOcrDraft {
+  ownerNameCandidate?: OcrFieldDraft<string>;
+  ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
+  seniorLienTotal?: OcrFieldDraft<number>;
+  hasRightsViolation?: OcrFieldDraft<boolean>;
+  issuedDate?: string;
+}
+
+export interface OcrResponse { draft: RegistryOcrDraft; }
+
+export type OcrErrorCode =
+  | 'OCR_NOT_CONFIGURED'
+  | 'INVALID_FILE'
+  | 'INVALID_REGISTRY_DOCUMENT'
+  | 'OCR_PROVIDER_FAILED'
+  | 'RATE_LIMITED';
+
+export interface OcrErrorResponse { error: string; code: OcrErrorCode; }
+
 export interface ReportRequest { pathResult: PathResult; }
 export interface ReportResponse { report: string; llm: boolean; }
 
