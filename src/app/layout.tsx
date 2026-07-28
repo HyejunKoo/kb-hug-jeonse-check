@@ -39,7 +39,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </form>
                 </>
               ) : (
-                <Link href="/login" className="btn-ghost">로그인</Link>
+                <>
+                  <Link href="/login" className="btn-ghost">로그인</Link>
+                  <Link href="/signup" className="btn-ghost">회원가입</Link>
+                </>
               )}
             </nav>
           </div>

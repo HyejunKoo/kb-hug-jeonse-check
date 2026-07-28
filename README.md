@@ -80,7 +80,8 @@ supabase/        DB 스키마
 
    | 키 | 필수 |
    |---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | 저장 쓸 때 |
+   | `NEXT_PUBLIC_SUPABASE_URL` | 로그인·저장 쓸 때 |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인(Auth) 필수 — 없으면 `/login`이 "환경변수 미설정" 안내만 표시 |
    | `SUPABASE_SERVICE_ROLE_KEY` | 저장 쓸 때 |
    | `JUSO_API_KEY` | 주소 검색 |
    | `BUILDING_API_KEY` | 건축물대장 조회 |

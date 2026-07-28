@@ -1,7 +1,9 @@
 'use client';
 // src/app/diagnosis/page.tsx — 진단 플로우
 // 1 신청인 → 2 예정계약 → 3 매물·등기 → 4 결과
-import { useState } from 'react';
+// 판정 실행(사전점검 실행)은 로그인이 필요하다. 비로그인이면 입력값을 세션에 잠깐 보관하고
+// 로그인/회원가입 안내 팝업을 띄운 뒤, 로그인 완료 후 돌아오면 재입력 없이 바로 결과를 보여준다.
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type {
   Applicant, PlannedContract, Property, RegistryInfo, PathResult, Verdict,
@@ -16,6 +18,23 @@ import { Row, Toggle, Nav } from '@/features/intake/components/fields';
 import { RegistryReview } from '@/features/registry/components/RegistryReview';
 import { ResultCard } from '@/features/result/components/ResultCard';
 import { VERDICT_KO, VERDICT_BADGE, VERDICT_DESC } from '@/features/result/formatter';
+import { getBrowserSupabase } from '@/lib/supabase/client';
+
+const PENDING_KEY = 'kb-pending-diagnosis';
+
+interface PendingCase {
+  applicant: Applicant;
+  contract: PlannedContract;
+  property: Property;
+  registry?: RegistryInfo;
+}
+
+async function hasSession(): Promise<boolean> {
+  const supabase = getBrowserSupabase();
+  if (!supabase) return false;
+  const { data: { session } } = await supabase.auth.getSession();
+  return !!session;
+}
 
 const STEPS = [
   { t: '신청인', d: '본인 조건을 구간 단위로 입력합니다. 실제 개인정보는 입력하지 마세요.' },
@@ -47,6 +66,7 @@ export default function DiagnosisPage() {
   const [caseId, setCaseId] = useState<string | null>(null);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // 주소 검색 상태
   const [query, setQuery] = useState('');
@@ -78,13 +98,12 @@ export default function DiagnosisPage() {
     } finally { setLoading(false); }
   }
 
-  async function onRunCheck() {
-    if (!property.address) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
-    setErrors([]); setLoading(true);
+  async function runCheck(a: Applicant, c: PlannedContract, p: Property, r?: RegistryInfo) {
+    setLoading(true);
     try {
       const res = await fetch('/api/check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(toDiagnosisCase(applicant, contract, property, registry)),
+        body: JSON.stringify(toDiagnosisCase(a, c, p, r)),
       });
       const data = await res.json();
       setResult(data.pathResult);
@@ -92,6 +111,38 @@ export default function DiagnosisPage() {
       setStep(3);
     } finally { setLoading(false); }
   }
+
+  async function onRunCheck() {
+    if (!property.address) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
+    setErrors([]);
+
+    if (!(await hasSession())) {
+      const pending: PendingCase = { applicant, contract, property, registry };
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    await runCheck(applicant, contract, property, registry);
+  }
+
+  // 로그인 유도 팝업 이후 로그인/회원가입을 마치고 돌아오면, 보관해둔 입력값으로 바로 판정을 이어간다
+  useEffect(() => {
+    (async () => {
+      const raw = sessionStorage.getItem(PENDING_KEY);
+      if (!raw) return;
+      if (!(await hasSession())) return; // 아직 로그인 전(예: 가입 확인 메일 대기) — 다음 방문 때 다시 시도
+
+      sessionStorage.removeItem(PENDING_KEY);
+      const pending: PendingCase = JSON.parse(raw);
+      setApplicant(pending.applicant);
+      setContract(pending.contract);
+      setProperty(pending.property);
+      setRegistry(pending.registry);
+      await runCheck(pending.applicant, pending.contract, pending.property, pending.registry);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onMakeReport() {
     if (!result) return;
@@ -137,6 +188,26 @@ export default function DiagnosisPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="card card-body w-full max-w-sm text-center">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-lg">🔒</span>
+            <h2 className="mt-4 text-base font-bold tracking-tight">로그인이 필요합니다</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              사전점검 결과를 확인하려면 로그인 또는 회원가입이 필요해요.
+              지금 입력한 내용은 그대로 보관되니 다시 입력하지 않아도 됩니다.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <Link href="/login?next=/diagnosis" className="btn-main flex-1">로그인</Link>
+              <Link href="/signup?next=/diagnosis" className="btn-sub flex-1">회원가입</Link>
+            </div>
+            <button type="button" className="btn-ghost mt-2 w-full" onClick={() => setShowLoginPrompt(false)}>
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ---------- 페이지 헤더 ---------- */}
       <header className="mb-7">
         <p className="eyebrow">계약 전 사전점검</p>
@@ -448,8 +519,8 @@ export default function DiagnosisPage() {
                       ✓ 저장됨 · <Link href="/diagnosis/result" className="underline underline-offset-2">내 이력에서 보기</Link>
                     </p>
                   ) : (
-                    <p className="mt-3 text-xs text-slate-500">
-                      <Link href="/login" className="font-semibold text-kb-700 underline underline-offset-2">로그인하면 결과를 저장할 수 있어요</Link>
+                    <p className="mt-3 text-xs text-amber-700">
+                      결과 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.
                     </p>
                   )}
                 </div>

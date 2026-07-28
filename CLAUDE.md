@@ -101,9 +101,11 @@ supabase/schema.sql               DB 스키마
 
 ## 현재 상태 / TODO
 
-- [완료-2번] Supabase Auth 이메일 매직링크/OTP 로그인, `/diagnosis/result`(+`[id]`) 이력 조회·삭제,
-  `diagnosis_cases`에 `user_id`+RLS 추가. 비로그인은 여전히 사전점검 가능하나 결과 미저장.
-  Supabase 대시보드에서 이메일 템플릿의 ConfirmationURL을 `/auth/confirm?token_hash=...&type=email` 형태로 바꿔야 매직링크가 동작함
+- [완료-2번] Supabase Auth 이메일+비밀번호 로그인(가입 시 1회만 이메일 인증), `/diagnosis/result`(+`[id]`)
+  이력 조회·삭제, `diagnosis_cases`에 `user_id`+RLS 추가.
+  **정책 변경**: 입력(1~3단계)은 비로그인도 가능하지만 "사전점검 실행"(판정)은 로그인 필수로 바뀜.
+  비로그인 상태로 실행하면 입력값을 `sessionStorage`에 보관한 채 로그인/회원가입 팝업을 띄우고,
+  로그인 완료 후 `/diagnosis`로 돌아오면 재입력 없이 그 값으로 자동 판정한다 (`src/app/diagnosis/page.tsx`).
 - [완료] 빌드 통과, /api/check 판정 동작 검증됨, GitHub 원격 연결(HyejunKoo/kb-hug-jeonse-check)
 - [완료-1번] `app/api/address` + `app/api/building` + `features/building/mapper.ts`: 주소검색→행정코드→건축HUB 표제부 실연동. 위반건축물은 공개 API 미제공이라 영구 자료 부족 처리
 - [완료] UI 개편: 디자인 토큰(`kb-*` 팔레트)·스테퍼·결과 카드. `tailwind.config.ts` 수정 시 dev 서버 재시작 필요
