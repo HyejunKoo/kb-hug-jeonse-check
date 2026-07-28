@@ -1,5 +1,21 @@
 // src/features/result/formatter.ts — 판정 결과 표시·리포트 템플릿 (후속 에이전트 담당)
-import type { PathResult, Verdict } from '@/types';
+import type { PathResult, RuleLayer, Verdict } from '@/types';
+
+/** 결과 화면·리포트에 층을 노출하는 순서 — 자료 충분성이 먼저다 */
+export const LAYER_ORDER: readonly RuleLayer[] = ['SUFFICIENCY', 'PRODUCT', 'GUARANTEE'];
+
+export const LAYER_KO: Record<RuleLayer, string> = {
+  SUFFICIENCY: '진단자료 충분성 검사',
+  PRODUCT: '1층 · KB 상품요건',
+  GUARANTEE: '2층 · HUG 보증요건',
+};
+
+export const BLOCKED_KO: Record<PathResult['blockedAt'], string> = {
+  NONE: '막힌 단계 없음',
+  PRODUCT: '1층 · KB 상품요건에서 막힘',
+  GUARANTEE: '2층 · HUG 보증요건에서 막힘',
+  INSUFFICIENT: '자료 부족으로 판정 보류',
+};
 
 export const VERDICT_KO: Record<Verdict, string> = {
   PUBLIC_REQUIREMENT_UNMET: '공개요건 미충족',
@@ -37,18 +53,32 @@ export const VERDICT_DESC: Record<Verdict, string> = {
 
 /** LLM 없이도 항상 생성되는 결정론적 리포트 (Gemini 폴백 겸 입력) */
 export function buildReportTemplate(r: PathResult): string {
+  const insufficient = r.blockedAt === 'INSUFFICIENT';
   const lines: string[] = [
     `# KB 상담용 사전점검 요약`,
     `경로: ${r.pathLabel}`,
-    `막힌 단계: ${r.blockedAt === 'NONE' ? '없음' : r.blockedAt === 'PRODUCT' ? '상품요건(1층)' : '보증요건(2층)'}`,
+    `막힌 단계: ${BLOCKED_KO[r.blockedAt]}`,
     `공식 심사 필요 항목: ${r.officialReviewCount}건`,
-    ``,
-    `## 판정 상세`,
   ];
-  for (const c of r.results) {
-    lines.push(`- [${VERDICT_KO[c.verdict]}] ${c.label}: ${c.reason}`);
-    if (c.nextAction) lines.push(`  → 다음 행동: ${c.nextAction}`);
+  if (insufficient) {
+    lines.push(
+      ``,
+      `※ 진단에 필요한 자료가 부족하거나 서로 맞지 않아 KB 상품요건·HUG 보증요건 대조는 실행하지 않았습니다.`,
+      `   아래 보완 항목을 채운 뒤 다시 진단해야 층별 판정을 볼 수 있습니다.`,
+    );
   }
+  lines.push(``, `## 판정 상세`);
+
+  for (const layer of LAYER_ORDER) {
+    const rows = r.results.filter((c) => c.layer === layer);
+    if (rows.length === 0) continue;
+    lines.push(``, `### ${LAYER_KO[layer]}`);
+    for (const c of rows) {
+      lines.push(`- [${VERDICT_KO[c.verdict]}] ${c.label}: ${c.reason}`);
+      if (c.nextAction) lines.push(`  → 다음 행동: ${c.nextAction}`);
+    }
+  }
+
   lines.push(``, `※ '확인된 충돌 없음'은 승인·보증 가능을 의미하지 않습니다.`);
   return lines.join('\n');
 }

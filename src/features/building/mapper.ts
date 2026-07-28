@@ -160,13 +160,20 @@ export function pickTitleItem(
   return { item: undefined, ambiguous: main.length > 1, onlyAnnex: false };
 }
 
-export function hubTitleToProperty(
-  base: { address: string; region?: Region },
-  item: HubTitleItem | undefined,
-): Property {
+/** 주소검색 결과 1건 → 건축HUB 조회 전의 Property 뼈대 (주소·지역만 채워진 상태) */
+export function jusoToProperty(j: JusoItem): Property {
+  const jibun = clean(j.jibunAddr);
+  return {
+    address: { value: clean(j.roadAddr) ?? jibun ?? '', source: 'PUBLIC_API' },
+    // 등기부 소재지는 지번 주소로 표기되므로 F04의 주소 대조에 이 값이 필요하다
+    jibunAddress: jibun ? { value: jibun, source: 'PUBLIC_API' } : undefined,
+    region: { value: regionFromSiNm(j.siNm), source: 'PUBLIC_API' },
+  };
+}
+
+export function hubTitleToProperty(base: Property, item: HubTitleItem | undefined): Property {
   const p: Property = {
-    address: base.address,
-    region: base.region,
+    ...base,
     fetchedAt: new Date().toISOString(),  // 명세 F-02: 조회시각 저장
   };
   if (!item) return p;
@@ -177,10 +184,10 @@ export function hubTitleToProperty(
   if (purpose) p.buildingUse = { value: purpose, source: 'PUBLIC_API' };
   p.propertyType = { value: housing.code, source: 'PUBLIC_API' };
   p.propertyTypeLabel = housing.label;
-  p.isMultiFamily = housing.isMultiFamily;
+  p.isMultiFamily = { value: housing.isMultiFamily, source: 'PUBLIC_API' };
 
   // 위반건축물: 건축HUB 표제부·기본개요 어디에도 필드가 없다 (2026-07 확인).
-  // 추정하지 않고 값을 비워 둔다 → 규칙엔진이 '자료 부족'으로 판정하고
-  // 사용자에게 정부24/세움터 건축물대장 열람을 안내한다.
+  // 추정하지 않고 값을 비워 둔다 → 사용자가 건축물대장을 열람해 직접 확인한 값
+  // (USER_CONFIRMED_DOCUMENT)이 들어오기 전까지 F04가 자료 부족으로 판정을 막는다.
   return p;
 }

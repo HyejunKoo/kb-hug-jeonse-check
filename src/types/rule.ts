@@ -8,7 +8,11 @@ export type Verdict =
   | 'POST_CONTRACT_REQUIREMENT'  // 계약 후 충족 요건
   | 'OFFICIAL_REVIEW_REQUIRED';  // 공식 심사 필요
 
-export type RuleLayer = 'PRODUCT' | 'GUARANTEE';
+/**
+ * SUFFICIENCY는 규칙팩에 들어가지 않는다 — F04(진단자료 충분성 검사)가 자체 생성하는 층이다.
+ * 상품·보증 요건과 달리 외부 공개요건이 아니라 "판정을 시작할 자료가 갖춰졌는가"를 본다.
+ */
+export type RuleLayer = 'SUFFICIENCY' | 'PRODUCT' | 'GUARANTEE';
 export type PathId = 'KB_STAR_HUG';
 
 export interface Rule {
