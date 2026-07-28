@@ -30,6 +30,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlError = searchParams.get('error');
+  const next = searchParams.get('next') || '/diagnosis/result';
 
   const [supabase] = useState(() => getBrowserSupabase());
 
@@ -56,7 +57,7 @@ function LoginForm() {
           setConfirming(false);
           return;
         }
-        router.push('/diagnosis/result');
+        router.push(next);
         router.refresh();
       });
       return;
@@ -81,7 +82,7 @@ function LoginForm() {
         setError(friendlyError(err.message));
         return;
       }
-      router.push('/diagnosis/result');
+      router.push(next);
       router.refresh();
     } finally {
       setLoading(false);
@@ -154,7 +155,10 @@ function LoginForm() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          계정이 없으신가요? <Link href="/signup" className="font-semibold text-kb-700 underline underline-offset-2">회원가입</Link>
+          계정이 없으신가요?{' '}
+          <Link href={`/signup?next=${encodeURIComponent(next)}`} className="font-semibold text-kb-700 underline underline-offset-2">
+            회원가입
+          </Link>
         </p>
       </div>
     </main>

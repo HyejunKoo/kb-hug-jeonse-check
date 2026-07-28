@@ -1,8 +1,8 @@
 'use client';
 // src/app/signup/page.tsx — Supabase Auth 이메일+비밀번호 회원가입 (2번 담당)
-// 가입 시 1회 이메일 인증(Confirm signup) 필요. 인증 완료 후 /login에서 비밀번호로 로그인한다.
-import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+// 가입 시 1회 이메일 인증(Confirm signup) 필요. 인증 완료 후 /login에서 세션이 만들어지고 next로 이동한다.
+import { Suspense, useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
@@ -13,8 +13,19 @@ function friendlyError(message: string): string {
 }
 
 export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const router = useRouter();
-  const supabase = getBrowserSupabase();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next') || '/diagnosis/result';
+
+  const [supabase] = useState(() => getBrowserSupabase());
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,8 +47,9 @@ export default function SignupPage() {
         email: email.trim(),
         password,
         // 기본 Confirm signup 템플릿은 세션을 URL 해시로 돌려주는 implicit flow라
-        // 서버 라우트가 아니라 /login(클라이언트)이 착지점이어야 한다.
-        options: { emailRedirectTo: `${window.location.origin}/login` },
+        // 서버 라우트가 아니라 /login(클라이언트)이 착지점이어야 한다. next를 실어보내
+        // 인증 완료 후 원래 가려던 곳(예: /diagnosis)으로 이어간다.
+        options: { emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(next)}` },
       });
       if (err) {
         setError(friendlyError(err.message));
@@ -45,7 +57,7 @@ export default function SignupPage() {
       }
       if (data.session) {
         // 이메일 인증 설정이 꺼져 있으면 가입과 동시에 로그인된다
-        router.push('/diagnosis/result');
+        router.push(next);
         router.refresh();
         return;
       }
@@ -78,9 +90,9 @@ export default function SignupPage() {
           <h1 className="mt-4 text-lg font-bold tracking-tight">가입 확인 메일을 보냈어요</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             <strong className="text-slate-900">{email}</strong>로 인증 메일을 보냈습니다.
-            <br />메일의 링크를 눌러 인증을 완료한 뒤 로그인해 주세요.
+            <br />메일의 링크를 눌러 인증을 완료하면 자동으로 로그인됩니다.
           </p>
-          <Link href="/login" className="btn-main mt-6 w-full">로그인으로 이동</Link>
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="btn-main mt-6 w-full">로그인으로 이동</Link>
         </div>
       </main>
     );
@@ -126,7 +138,10 @@ export default function SignupPage() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          이미 계정이 있으신가요? <Link href="/login" className="font-semibold text-kb-700 underline underline-offset-2">로그인</Link>
+          이미 계정이 있으신가요?{' '}
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-semibold text-kb-700 underline underline-offset-2">
+            로그인
+          </Link>
         </p>
       </div>
     </main>
