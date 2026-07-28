@@ -3,9 +3,13 @@
 // 절대 규칙: 판정은 여기서만 한다. LLM에게 판정 시키지 않는다.
 // 동일 입력 + 동일 규칙팩 버전 → 항상 동일 결과 (결정론)
 // ============================================================
-import type { DiagnosisCase, Rule, Verdict } from '@/types';
+import type { DiagnosisCase, Field, Rule, Verdict } from '@/types';
+import { SOURCE_KO } from './sufficiency';
 
 const won = (n: number) => `${(n / 100000000).toFixed(1)}억원`;
+
+/** usedValues에 붙일 출처 꼬리표. 출처는 Field에 이미 들어있으니 문자열로 지어내지 않는다. */
+const tag = (f: Field<unknown>) => `(${SOURCE_KO[f.source]})`;
 
 /** 개별 체크 함수의 반환: verdict + 사람이 읽는 근거 */
 export interface CheckOutcome {
@@ -21,12 +25,12 @@ export type Checker = (c: DiagnosisCase, params: Rule['params']) => CheckOutcome
 
 const checkAge: Checker = (c, p) => {
   const min = Number(p?.min ?? 19), max = Number(p?.max ?? 34);
-  const age = c.applicant.age;
+  const age = c.applicant.age.value;
   const ok = age >= min && age <= max;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: `신고 연령 ${age}세 — 요건 만 ${min}~${max}세`,
-    usedValues: [`연령 ${age}세 (자기신고)`],
+    usedValues: [`연령 ${age}세 ${tag(c.applicant.age)}`],
     nextAction: ok ? '' : '연령 요건이 다른 KB 상품을 확인하세요.',
   };
 };
@@ -34,8 +38,8 @@ const checkAge: Checker = (c, p) => {
 const HH_LABEL = { YES: '세대주', NO: '세대원', PLANNED: '세대주 예정자' } as const;
 
 const checkHouseholder: Checker = (c) => {
-  const h = c.applicant.householdHead;
-  const used = [`세대주 상태: ${HH_LABEL[h]} (자기신고)`];
+  const h = c.applicant.householdHead.value;
+  const used = [`세대주 상태: ${HH_LABEL[h]} ${tag(c.applicant.householdHead)}`];
   if (h === 'YES') {
     return { verdict: 'NO_PUBLIC_CONFLICT_FOUND', reason: '세대주로 신고됨', usedValues: used, nextAction: '' };
   }
@@ -58,23 +62,25 @@ const checkHouseholder: Checker = (c) => {
 
 const checkHomeCount: Checker = (c, p) => {
   const max = Number(p?.maxHomes ?? 1);
-  const n = c.applicant.homeCount;
+  const n = c.applicant.homeCount.value;
   const ok = n <= max;
+  const label = n === 2 ? '2채 이상' : `${n}채`;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: `신고 주택보유 ${n === 2 ? '2채 이상' : `${n}채`} — 요건 ${max}주택 이내 (KB 상품 기준. HUG 보증은 무주택 요건일 수 있음)`,
-    usedValues: [`주택보유 ${n === 2 ? '2채 이상' : `${n}채`} (자기신고)`],
+    reason: `신고 주택보유 ${label} — 요건 ${max}주택 이내 (KB 상품 기준. HUG 보증은 무주택 요건일 수 있음)`,
+    usedValues: [`주택보유 ${label} ${tag(c.applicant.homeCount)}`],
     nextAction: ok ? '' : '보유 주택 처분 계획이 있다면 KB 상담 시 함께 문의하세요.',
   };
 };
 
 const checkIncomeCap: Checker = (c, p) => {
-  const band = c.applicant.incomeBand;
+  const band = c.applicant.incomeBand.value;
+  // '모름'은 F04(진단자료 충분성 검사)에서 이미 걸러진다. 규칙팩을 단독 실행하는 경우를 위한 방어.
   if (band === 'UNKNOWN') {
     return {
       verdict: 'MISSING_INFORMATION',
       reason: '부부합산 연소득을 "모름"으로 선택 — 소득 상한 요건 판정 불가',
-      usedValues: ['소득구간: 모름 (자기신고)'],
+      usedValues: [`소득구간: 모름 ${tag(c.applicant.incomeBand)}`],
       nextAction: '원천징수영수증·소득금액증명으로 부부합산 소득을 확인 후 다시 진단하세요.',
     };
   }
@@ -85,36 +91,36 @@ const checkIncomeCap: Checker = (c, p) => {
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: `신고 소득구간 기준 상한 요건 ${ok ? '이내' : '초과'} (한도 계산 아님, O/X 판정)`,
-    usedValues: [`소득구간 ${band} (자기신고)`],
+    usedValues: [`소득구간 ${band} ${tag(c.applicant.incomeBand)}`],
     nextAction: ok ? '' : '소득 상한이 다른 상품(예: 청년 맞춤형 7천)을 확인하세요.',
   };
 };
 
 const checkExistingLoan: Checker = (c) => {
-  const v = c.applicant.existingJeonseLoan;
-  const label = { NONE: '없음', HAS_ONE: '1건', HAS_MULTIPLE: '2건 이상' }[v];
-  if (v === 'NONE') {
+  const f = c.applicant.existingJeonseLoan;
+  const label = { NONE: '없음', HAS_ONE: '1건', HAS_MULTIPLE: '2건 이상' }[f.value];
+  if (f.value === 'NONE') {
     return {
       verdict: 'NO_PUBLIC_CONFLICT_FOUND',
       reason: '기존 전세자금대출 없음으로 신고됨',
-      usedValues: [`기존 전세대출: ${label} (자기신고)`],
+      usedValues: [`기존 전세대출: ${label} ${tag(f)}`],
       nextAction: '',
     };
   }
   return {
     verdict: 'OFFICIAL_REVIEW_REQUIRED',
     reason: `기존 전세자금대출 ${label} 보유 — 중복 이용 제한 해당 여부는 기관 전산 조회가 필요`,
-    usedValues: [`기존 전세대출: ${label} (자기신고)`],
+    usedValues: [`기존 전세대출: ${label} ${tag(f)}`],
     nextAction: '기존 대출의 상환·승계 계획을 정리해 KB 상담 시 중복 제한 해당 여부를 확인하세요.',
   };
 };
 
 const checkBrokered: Checker = (c) => {
-  const ok = c.contract.brokered;
+  const ok = c.contract.brokered.value;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: ok ? '공인중개사 중개 계약 예정' : '직거래로 신고됨 — 중개 계약 요건과 충돌',
-    usedValues: [`중개 여부: ${ok ? '중개' : '직거래'} (자기신고)`],
+    usedValues: [`중개 여부: ${ok ? '중개' : '직거래'} ${tag(c.contract.brokered)}`],
     nextAction: ok ? '' : '직거래 시 취급 가능 여부를 KB에 확인하거나 중개 계약을 검토하세요.',
   };
 };
@@ -123,32 +129,33 @@ const checkBrokered: Checker = (c) => {
 
 const checkTermMin: Checker = (c, p) => {
   const min = Number(p?.minMonths ?? 12);
-  const t = c.contract.termMonths;
+  const t = c.contract.termMonths.value;
   const ok = t >= min;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: `계약기간 ${t}개월 — 요건 ${min}개월 이상`,
-    usedValues: [`계약기간 ${t}개월 (자기신고)`],
+    usedValues: [`계약기간 ${t}개월 ${tag(c.contract.termMonths)}`],
     nextAction: ok ? '' : '계약기간을 1년 이상으로 조정 가능한지 임대인과 협의하세요.',
   };
 };
 
 const checkDepositCap: Checker = (c, p) => {
   const region = c.property.region;
+  const deposit = c.contract.deposit;
   if (!region) {
     return {
       verdict: 'MISSING_INFORMATION',
       reason: '주소에서 수도권/비수도권을 판별하지 못함',
-      usedValues: [`주소 ${c.property.address || '(미입력)'}`],
+      usedValues: [`주소 ${c.property.address?.value || '(미입력)'}`],
       nextAction: '도로명 주소를 정확히 입력해 주세요.',
     };
   }
-  const cap = region === 'CAPITAL' ? Number(p?.capitalCap) : Number(p?.nonCapitalCap);
-  const ok = c.contract.deposit <= cap;
+  const cap = region.value === 'CAPITAL' ? Number(p?.capitalCap) : Number(p?.nonCapitalCap);
+  const ok = deposit.value <= cap;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: `보증금 ${won(c.contract.deposit)} — ${region === 'CAPITAL' ? '수도권' : '비수도권'} 한도 ${won(cap)}`,
-    usedValues: [`보증금 ${won(c.contract.deposit)} (자기신고)`, `지역 구분 (주소 파싱)`],
+    reason: `보증금 ${won(deposit.value)} — ${region.value === 'CAPITAL' ? '수도권' : '비수도권'} 한도 ${won(cap)}`,
+    usedValues: [`보증금 ${won(deposit.value)} ${tag(deposit)}`, `지역 구분 ${tag(region)}`],
     nextAction: ok ? '' : '보증금이 한도를 초과합니다. 다른 매물 또는 다른 경로를 검토하세요.',
   };
 };
@@ -167,7 +174,7 @@ const checkNotIllegalBuilding: Checker = (c) => {
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: ok ? '건축물대장상 위반건축물 표시 없음' : '건축물대장에 위반건축물 표시 있음',
-    usedValues: [`위반건축물 여부 (건축HUB API)`],
+    usedValues: [`위반건축물 여부 ${tag(f)}`],
     nextAction: ok ? '' : '위반건축물은 HUG 보증이 어렵습니다. 계약 보류를 권고합니다.',
   };
 };
@@ -186,7 +193,7 @@ const checkNoRightsViolation: Checker = (c) => {
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
     reason: ok ? '확인된 압류·가압류·경매·가처분·가등기 없음' : '등기부상 권리침해 기재 확인됨',
-    usedValues: ['권리침해 여부 (고객확인문서)'],
+    usedValues: [`권리침해 여부 ${tag(f)}`],
     nextAction: ok ? '' : '권리침해가 있는 매물은 보증이 어렵습니다. 계약 보류를 권고합니다.',
   };
 };
@@ -201,7 +208,7 @@ const checkOwnerMatch: Checker = (c) => {
       nextAction: '등기부를 업로드해 소유자명과 임대인명이 같은지 확인해 주세요.',
     };
   }
-  const used = ['소유자·임대인 일치 여부 (고객확인문서)'];
+  const used = [`소유자·임대인 일치 여부 ${tag(f)}`];
   if (f.value === 'MATCHED') {
     return {
       verdict: 'NO_PUBLIC_CONFLICT_FOUND',
@@ -240,7 +247,7 @@ const checkSeniorLienRatio: Checker = (c) => {
   return {
     verdict: 'OFFICIAL_REVIEW_REQUIRED',
     reason: `선순위채권 ${won(lien.value)} 확인됨. 비율 판정에는 공식 시세 기반 주택가격이 필요 — 공개정보로 판단 불가`,
-    usedValues: [`선순위채권 ${won(lien.value)} (고객확인문서)`],
+    usedValues: [`선순위채권 ${won(lien.value)} ${tag(lien)}`],
     nextAction: 'KB 상담 시 주택가격 산정 기준과 선순위 비율 충족 여부를 문의하세요.',
   };
 };
@@ -248,7 +255,9 @@ const checkSeniorLienRatio: Checker = (c) => {
 /** 다가구 여부에 따른 선순위 임차보증금 경고 (HUG 담보인정 다가구 80% / 그 외 90%) */
 const checkMultiFamilyRisk: Checker = (c) => {
   const t = c.property.propertyTypeLabel;
-  if (!c.property.propertyType) {
+  const type = c.property.propertyType;
+  const multi = c.property.isMultiFamily;
+  if (!type || !multi) {
     return {
       verdict: 'MISSING_INFORMATION',
       reason: '주택 유형 미확인 — 담보인정비율 기준(다가구 80% / 그 외 90%)을 특정할 수 없음',
@@ -256,18 +265,18 @@ const checkMultiFamilyRisk: Checker = (c) => {
       nextAction: '주소를 확인해 건축물대장 조회를 다시 시도하세요.',
     };
   }
-  if (c.property.isMultiFamily) {
+  if (multi.value) {
     return {
       verdict: 'OFFICIAL_REVIEW_REQUIRED',
       reason: '다가구주택 — 다른 임차인의 선순위 보증금 총액이 담보인정 한도에 포함되나 계약 전 확인 불가',
-      usedValues: [`주택 유형 ${t} (건축HUB)`],
+      usedValues: [`주택 유형 ${t} ${tag(type)}`],
       nextAction: '임대인에게 선순위 임차보증금 총액 확인서를 요청하고, KB 상담 시 함께 제시하세요.',
     };
   }
   return {
     verdict: 'NO_PUBLIC_CONFLICT_FOUND',
     reason: `${t} — 호별 개별 등기로 선순위 임차보증금 합산 대상 아님`,
-    usedValues: [`주택 유형 ${t} (건축HUB)`],
+    usedValues: [`주택 유형 ${t} ${tag(type)}`],
     nextAction: '',
   };
 };
@@ -288,7 +297,7 @@ const checkEligiblePropertyType: Checker = (c) => {
     return {
       verdict: 'PUBLIC_REQUIREMENT_UNMET',
       reason: `${label} — 보증 대상 주택유형(아파트·연립·다세대·주거용 오피스텔)에 해당하지 않음`,
-      usedValues: [`주택 유형 ${label} (건축HUB)`],
+      usedValues: [`주택 유형 ${label} ${tag(f)}`],
       nextAction: '보증 대상 주택유형의 매물을 검토하세요.',
     };
   }
@@ -296,14 +305,14 @@ const checkEligiblePropertyType: Checker = (c) => {
     return {
       verdict: 'OFFICIAL_REVIEW_REQUIRED',
       reason: '오피스텔 — 주거용으로 인정되는지는 실제 사용 용도 확인이 필요',
-      usedValues: [`주택 유형 ${label} (건축HUB)`],
+      usedValues: [`주택 유형 ${label} ${tag(f)}`],
       nextAction: '주거용 오피스텔로 인정받을 수 있는지 KB 상담 시 확인하세요.',
     };
   }
   return {
     verdict: 'NO_PUBLIC_CONFLICT_FOUND',
     reason: `${label} — 보증 대상 주택유형에 해당`,
-    usedValues: [`주택 유형 ${label} (건축HUB)`],
+    usedValues: [`주택 유형 ${label} ${tag(f)}`],
     nextAction: '',
   };
 };

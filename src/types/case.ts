@@ -19,7 +19,11 @@ export type HomeCount = 0 | 1 | 2;                                  // 2 = "2채
 export type HouseholdHead = 'YES' | 'NO' | 'PLANNED';               // PLANNED = 세대주 예정자
 export type ExistingJeonseLoan = 'NONE' | 'HAS_ONE' | 'HAS_MULTIPLE';
 
-export interface Applicant {
+// ---- 화면 입력용 raw 타입 ----
+// 입력 폼은 출처를 모르고 값만 다룬다. 출처(Field)는 features/intake/mapper.ts의
+// toDiagnosisCase()가 한 곳에서 붙인다 — 화면 곳곳에서 source를 지어내지 못하게 하기 위함.
+
+export interface ApplicantInput {
   age: number;                          // 19~99
   householdHead: HouseholdHead;
   homeCount: HomeCount;
@@ -29,11 +33,32 @@ export interface Applicant {
   existingJeonseLoan: ExistingJeonseLoan;
 }
 
-export interface PlannedContract {
+export interface PlannedContractInput {
   deposit: number;        // 원 단위
   termMonths: number;
   moveInDate: string;     // YYYY-MM-DD
   brokered: boolean;      // 공인중개사 중개 여부
+}
+
+// ---- 판정 입력 타입 ----
+// 규칙엔진이 소비하는 값은 예외 없이 Field<T>다. F04(진단자료 충분성 검사)가
+// 값 존재 여부와 함께 source 유효성까지 검사한다.
+
+export interface Applicant {
+  age: Field<number>;
+  householdHead: Field<HouseholdHead>;
+  homeCount: Field<HomeCount>;
+  maritalStatus: Field<MaritalStatus>;
+  incomeBand: Field<IncomeBand>;        // 상한 O/X 판정용. 한도 계산 금지
+  incomeType: Field<IncomeType>;
+  existingJeonseLoan: Field<ExistingJeonseLoan>;
+}
+
+export interface PlannedContract {
+  deposit: Field<number>;        // 원 단위
+  termMonths: Field<number>;
+  moveInDate: Field<string>;     // YYYY-MM-DD
+  brokered: Field<boolean>;      // 공인중개사 중개 여부
 }
 
 export type Region = 'CAPITAL' | 'NON_CAPITAL';
@@ -47,13 +72,15 @@ export type PropertyTypeCode =
   | 'OUT_OF_SCOPE'; // 그 외 — 대상주택 요건 미충족
 
 export interface Property {
-  address: string;
-  region?: Region;                        // DERIVED
+  address: Field<string>;                 // 도로명 주소 (주소검색 API 선택값)
+  jibunAddress?: Field<string>;           // 지번 주소 — 등기부 소재지 대조에 쓴다
+  region?: Field<Region>;                 // 주소검색 API의 시도명에서 도출
   buildingUse?: Field<string>;            // 건축물대장 주용도 원문
   propertyType?: Field<PropertyTypeCode>; // 자기신고 경로 없음 (명세 완료조건)
   propertyTypeLabel?: string;             // 화면 표기용 한글
-  isMultiFamily?: boolean;                // 다가구 여부 (선순위 임차보증금 경고용)
-  isIllegalBuilding?: Field<boolean>;     // 공개 API 미제공 → 현재 항상 미확보
+  isMultiFamily?: Field<boolean>;         // 다가구 여부 (선순위 임차보증금 경고용)
+  /** 위반건축물 표시 — 건축HUB 미제공이라 사용자가 건축물대장을 열람해 확인한 값만 들어온다 */
+  isIllegalBuilding?: Field<boolean>;
   exclusiveArea?: Field<number>;          // 전용면적 ㎡
   fetchedAt?: string;                     // 공공API 조회시각 ISO. 명세 F-02 저장정보
 }
@@ -65,6 +92,12 @@ export interface Property {
  */
 export type OwnerMatchStatus = 'MATCHED' | 'MATCHED_PARTIAL_CO_OWNERS' | 'NOT_MATCHED';
 
+/**
+ * 등기부 소재지와 선택한 매물 주소가 같은 건물인지 — 고객이 직접 대조해 선택한다.
+ * 확인하지 못한 경우는 값을 넣지 않는다 (F04가 자료 부족으로 잡는다).
+ */
+export type AddressMatchStatus = 'MATCHED' | 'NOT_MATCHED';
+
 export interface RegistryInfo {
   /** 등기부 소유자와 계약 임대인이 같은 사람인지 — 실명은 저장하지 않고 결과만 저장 */
   ownerMatch?: Field<OwnerMatchStatus>;
@@ -73,7 +106,10 @@ export interface RegistryInfo {
   hasRightsViolation?: Field<boolean>;
   /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용 — 아직 자동 판정에는 쓰지 않음) */
   existingLeaseholdRights?: Field<boolean>;
-  issuedDate?: string;
+  /** 등기부 표제부의 소재지 표기 (지번 주소). 선택한 매물 주소와 대조하는 데 쓴다 */
+  documentAddress?: Field<string>;
+  addressMatch?: Field<AddressMatchStatus>;
+  issuedDate?: Field<string>;   // YYYY-MM-DD
 }
 
 export interface DiagnosisCase {

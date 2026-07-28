@@ -31,12 +31,21 @@ export function ResultCard({ r }: { r: CheckResult }) {
           </p>
         )}
 
+        {/* F04(진단자료 충분성) 결과는 외부 공개요건이 아니라 내부 검사라 출처 URL·기준일이 없다 */}
         <p className="mt-3 border-t border-slate-100 pt-2.5 text-[11px] text-slate-400">
-          <a className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600" href={r.sourceUrl} target="_blank" rel="noreferrer">
-            출처 확인
-          </a>
-          <span className="divide-dot">·</span>
-          기준일 {r.effectiveFrom}
+          {r.sourceUrl ? (
+            <a className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600" href={r.sourceUrl} target="_blank" rel="noreferrer">
+              출처 확인
+            </a>
+          ) : (
+            <span>서비스 내부 검사</span>
+          )}
+          {r.effectiveFrom && (
+            <>
+              <span className="divide-dot">·</span>
+              기준일 {r.effectiveFrom}
+            </>
+          )}
           <span className="divide-dot">·</span>
           {r.ruleId}
         </p>

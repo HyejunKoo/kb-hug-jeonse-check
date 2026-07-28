@@ -3,16 +3,9 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { ResultCard } from '@/features/result/components/ResultCard';
-import { VERDICT_KO } from '@/features/result/formatter';
+import { VERDICT_KO, BLOCKED_KO, LAYER_ORDER, LAYER_KO } from '@/features/result/formatter';
 import type { PathResult, Verdict } from '@/types';
 import { DeleteCaseButton } from './DeleteCaseButton';
-
-const BLOCKED_KO: Record<PathResult['blockedAt'], string> = {
-  NONE: '막힌 단계 없음',
-  PRODUCT: '1층 · KB 상품요건에서 막힘',
-  GUARANTEE: '2층 · HUG 보증요건에서 막힘',
-  INSUFFICIENT: '자료 부족으로 판정 보류',
-};
 
 export default async function ResultDetailPage({ params }: { params: { id: string } }) {
   const supabase = getServerSupabase();
@@ -54,15 +47,13 @@ export default async function ResultDetailPage({ params }: { params: { id: strin
         </div>
       </div>
 
-      {(['PRODUCT', 'GUARANTEE'] as const).map((layer) => {
+      {LAYER_ORDER.map((layer) => {
         const rows = result.results.filter((r) => r.layer === layer);
         if (rows.length === 0) return null;
         return (
           <div key={layer} className="mb-6">
             <div className="mb-3 flex items-baseline gap-2">
-              <h2 className="text-sm font-bold text-slate-900">
-                {layer === 'PRODUCT' ? '1층 · KB 상품요건' : '2층 · HUG 보증요건'}
-              </h2>
+              <h2 className="text-sm font-bold text-slate-900">{LAYER_KO[layer]}</h2>
               <span className="text-xs text-slate-400">{rows.length}개 항목</span>
             </div>
             <div className="space-y-2.5">

@@ -1,13 +1,20 @@
 // POST /api/check — 규칙엔진 판정 (후속 에이전트 담당: F07 조합)
 // body: CheckRequest(DiagnosisCase) → CheckResponse
+// 흐름: F04 진단자료 충분성 검사 → (충분할 때만) 규칙팩 실행
+//   자료가 부족하거나 상충하면 runRulePack()을 아예 호출하지 않고 blockedAt: 'INSUFFICIENT'만
+//   돌려준다. 빈 값 위에서 만든 요건 판정을 사용자에게 보여주면 안 되기 때문이다.
 // 로그인 사용자만 diagnosis_cases에 저장한다. 비로그인은 판정만 반환하고 저장하지 않는다.
 import { NextResponse } from 'next/server';
 import { runRulePack, parseRegion } from '@/lib/rule-engine';
-import { getRulePack } from '@/lib/crawlers/rule-provider';
+import { validateDiagnosticSufficiency, toSufficiencyResults } from '@/lib/rule-engine/sufficiency';
+import { getRulePack, getFallbackRuleVersion } from '@/lib/crawlers/rule-provider';
 import { getServerSupabase } from '@/lib/supabase/server';
-import type { CheckRequest, OverallStatus, PathResult } from '@/types';
+import type { CheckRequest, OverallStatus, PathResult, RuleSource } from '@/types';
 
 export const maxDuration = 30;
+
+const PATH_ID = 'KB_STAR_HUG' as const;
+const PATH_LABEL = 'KB스타 전세자금대출 (HUG)';
 
 function toOverallStatus(r: PathResult): OverallStatus {
   if (r.blockedAt === 'PRODUCT' || r.blockedAt === 'GUARANTEE') return 'fail';
@@ -23,13 +30,44 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: '잘못된 요청 본문입니다.' }, { status: 400 });
   }
-
-  if (!diag.property.region) {
-    diag.property.region = parseRegion(diag.property.address);
+  if (!diag?.applicant || !diag?.contract || !diag?.property) {
+    return NextResponse.json({ error: '신청인·예정계약·매물 정보가 모두 필요합니다.' }, { status: 400 });
   }
 
-  const pack = await getRulePack(); // 크롤링 캐시 or JSON 폴백
-  const pathResult = runRulePack(diag, pack);
+  // 건축HUB 조회가 지역을 못 채운 경우의 보조 경로. 주소 자체가 주소검색 API에서 온 값이라
+  // 도출값의 출처도 그 주소의 출처를 그대로 따른다.
+  if (!diag.property.region && diag.property.address?.value) {
+    const region = parseRegion(diag.property.address.value);
+    if (region) diag.property.region = { value: region, source: diag.property.address.source };
+  }
+
+  // ---- F04: 자료가 갖춰졌는지 먼저 본다 ----
+  const issues = validateDiagnosticSufficiency(diag);
+  const sufficiencyResults = toSufficiencyResults(issues);
+
+  let pathResult: PathResult;
+  let ruleVersion: string;
+  let ruleSource: RuleSource;
+
+  if (issues.length > 0) {
+    // 판정을 중단하기로 한 요청이라 규칙팩도 가져오지 않는다 — 크롤러가 붙으면 외부 호출이 따라온다.
+    // 적용된 규칙이 하나도 없으므로 버전은 "어느 기준의 F04였나"를 남기는 로컬 값만 기록한다.
+    pathResult = {
+      path: PATH_ID,
+      pathLabel: PATH_LABEL,
+      blockedAt: 'INSUFFICIENT',
+      results: sufficiencyResults,
+      officialReviewCount: 0,
+    };
+    ruleVersion = getFallbackRuleVersion();
+    ruleSource = 'FALLBACK_JSON';
+  } else {
+    const pack = await getRulePack(); // 크롤링 캐시 or JSON 폴백
+    const ruleResult = runRulePack(diag, pack);
+    pathResult = { ...ruleResult, results: [...sufficiencyResults, ...ruleResult.results] };
+    ruleVersion = pack.version;
+    ruleSource = pack.source;
+  }
 
   let caseId: string | undefined;
   const supabase = getServerSupabase();
@@ -42,7 +80,7 @@ export async function POST(req: Request) {
           user_id: user.id,
           payload: diag,
           result: pathResult,
-          rule_version: pack.version,
+          rule_version: ruleVersion,
           status: toOverallStatus(pathResult),
         })
         .select('id')
@@ -52,5 +90,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ pathResult, ruleVersion: pack.version, ruleSource: pack.source, caseId });
+  return NextResponse.json({ pathResult, ruleVersion, ruleSource, caseId });
 }

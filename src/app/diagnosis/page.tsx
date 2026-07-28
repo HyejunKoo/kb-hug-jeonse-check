@@ -6,10 +6,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type {
-  Applicant, PlannedContract, Property, RegistryInfo, PathResult, Verdict,
+  ApplicantInput, PlannedContractInput, Property, RegistryInfo, PathResult, Verdict,
 } from '@/types';
 import {
-  DEFAULT_APPLICANT, DEFAULT_CONTRACT, validateApplicant, validateContract, needsSpouseIncome,
+  DEFAULT_APPLICANT, DEFAULT_CONTRACT, EMPTY_PROPERTY,
+  validateApplicant, validateContract, needsSpouseIncome,
 } from '@/features/intake/schema';
 import { toDiagnosisCase } from '@/features/intake/mapper';
 import { searchAddress, fetchBuildingInfo } from '@/features/building/client';
@@ -17,14 +18,16 @@ import type { JusoItem } from '@/features/building/mapper';
 import { Row, Toggle, Nav } from '@/features/intake/components/fields';
 import { RegistryReview } from '@/features/registry/components/RegistryReview';
 import { ResultCard } from '@/features/result/components/ResultCard';
-import { VERDICT_KO, VERDICT_BADGE, VERDICT_DESC } from '@/features/result/formatter';
+import {
+  VERDICT_KO, VERDICT_BADGE, VERDICT_DESC, LAYER_ORDER, LAYER_KO,
+} from '@/features/result/formatter';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
 const PENDING_KEY = 'kb-pending-diagnosis';
 
 interface PendingCase {
-  applicant: Applicant;
-  contract: PlannedContract;
+  applicant: ApplicantInput;
+  contract: PlannedContractInput;
   property: Property;
   registry?: RegistryInfo;
 }
@@ -43,13 +46,16 @@ const STEPS = [
   { t: '결과', d: '항목별 판정을 층별로 나눠 근거·출처와 함께 보여줍니다.' },
 ];
 
-const INCOME_KO: Record<Applicant['incomeBand'], string> = {
+const INCOME_KO: Record<ApplicantInput['incomeBand'], string> = {
   UNDER_50M: '5천만원 이하', B50_60M: '5천~6천만원', B60_70M: '6천~7천만원',
   OVER_70M: '7천만원 초과', UNKNOWN: '모름',
 };
-const HEAD_KO: Record<Applicant['householdHead'], string> = {
+const HEAD_KO: Record<ApplicantInput['householdHead'], string> = {
   YES: '세대주', NO: '세대원', PLANNED: '세대주 예정',
 };
+
+/** 위반건축물 표시 여부 — 공개 API에 없어 사용자가 건축물대장을 열람해 고른다 */
+type IllegalChoice = 'YES' | 'NO' | 'UNKNOWN';
 
 const won = (n: number) => (n > 0 ? `${(n / 100000000).toFixed(2)}억원` : '—');
 
@@ -58,9 +64,9 @@ export default function DiagnosisPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const [applicant, setApplicant] = useState<Applicant>(DEFAULT_APPLICANT);
-  const [contract, setContract] = useState<PlannedContract>(DEFAULT_CONTRACT);
-  const [property, setProperty] = useState<Property>({ address: '' });
+  const [applicant, setApplicant] = useState<ApplicantInput>(DEFAULT_APPLICANT);
+  const [contract, setContract] = useState<PlannedContractInput>(DEFAULT_CONTRACT);
+  const [property, setProperty] = useState<Property>(EMPTY_PROPERTY);
   const [registry, setRegistry] = useState<RegistryInfo | undefined>();
   const [result, setResult] = useState<PathResult | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -75,14 +81,25 @@ export default function DiagnosisPage() {
   const [notes, setNotes] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
 
-  const set = <K extends keyof Applicant>(k: K, v: Applicant[K]) =>
+  const set = <K extends keyof ApplicantInput>(k: K, v: ApplicantInput[K]) =>
     setApplicant({ ...applicant, [k]: v });
-  const setC = <K extends keyof PlannedContract>(k: K, v: PlannedContract[K]) =>
+  const setC = <K extends keyof PlannedContractInput>(k: K, v: PlannedContractInput[K]) =>
     setContract({ ...contract, [k]: v });
+
+  // 위반건축물 여부는 property 안에 직접 담는다 — 세션 보관·복원 경로가 자동으로 따라오고,
+  // 매물을 다시 고르면 property가 통째로 갈리면서 이전 확인값도 함께 사라진다.
+  const illegalChoice: IllegalChoice =
+    property.isIllegalBuilding === undefined ? 'UNKNOWN' : property.isIllegalBuilding.value ? 'YES' : 'NO';
+
+  const setIllegal = (v: IllegalChoice) =>
+    setProperty({
+      ...property,
+      isIllegalBuilding: v === 'UNKNOWN' ? undefined : { value: v === 'YES', source: 'USER_CONFIRMED_DOCUMENT' },
+    });
 
   async function onSearch() {
     if (!query.trim()) return;
-    setLoading(true); setSearched(true); setSelected(null); setProperty({ address: '' }); setRegistry(undefined);
+    setLoading(true); setSearched(true); setSelected(null); setProperty(EMPTY_PROPERTY); setRegistry(undefined);
     try {
       const { candidates: list, notes: n } = await searchAddress(query);
       setCandidates(list); setNotes(n);
@@ -98,7 +115,7 @@ export default function DiagnosisPage() {
     } finally { setLoading(false); }
   }
 
-  async function runCheck(a: Applicant, c: PlannedContract, p: Property, r?: RegistryInfo) {
+  async function runCheck(a: ApplicantInput, c: PlannedContractInput, p: Property, r?: RegistryInfo) {
     setLoading(true);
     try {
       const res = await fetch('/api/check', {
@@ -113,7 +130,7 @@ export default function DiagnosisPage() {
   }
 
   async function onRunCheck() {
-    if (!property.address) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
+    if (!property.address.value) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
     setErrors([]);
 
     if (!(await hasSession())) {
@@ -284,7 +301,7 @@ export default function DiagnosisPage() {
                   hint="주민등록등본 맨 위에 나오는 사람이 세대주입니다. 혼자 전입신고를 했다면 보통 세대주, 부모님 주소에 함께 등록돼 있다면 세대원이에요. 정부24에서 등본을 떼면 확인할 수 있습니다."
                 >
                   <select className="inp" value={applicant.householdHead}
-                    onChange={(e) => set('householdHead', e.target.value as Applicant['householdHead'])}>
+                    onChange={(e) => set('householdHead', e.target.value as ApplicantInput['householdHead'])}>
                     <option value="YES">세대주</option>
                     <option value="NO">세대원</option>
                     <option value="PLANNED">세대주 예정 (곧 전입·세대분리)</option>
@@ -302,7 +319,7 @@ export default function DiagnosisPage() {
 
                 <Row label="혼인 상태" required hint="소득·주택 보유를 배우자와 합산할지 결정하는 데 씁니다.">
                   <select className="inp" value={applicant.maritalStatus}
-                    onChange={(e) => set('maritalStatus', e.target.value as Applicant['maritalStatus'])}>
+                    onChange={(e) => set('maritalStatus', e.target.value as ApplicantInput['maritalStatus'])}>
                     <option value="SINGLE">미혼</option>
                     <option value="MARRIED">기혼</option>
                     <option value="PLANNED">결혼 예정</option>
@@ -317,7 +334,7 @@ export default function DiagnosisPage() {
                   }`}
                 >
                   <select className="inp" value={applicant.incomeBand}
-                    onChange={(e) => set('incomeBand', e.target.value as Applicant['incomeBand'])}>
+                    onChange={(e) => set('incomeBand', e.target.value as ApplicantInput['incomeBand'])}>
                     <option value="UNDER_50M">5천만원 이하</option>
                     <option value="B50_60M">5천~6천만원</option>
                     <option value="B60_70M">6천~7천만원</option>
@@ -328,7 +345,7 @@ export default function DiagnosisPage() {
 
                 <Row label="소득 유형" required>
                   <select className="inp" value={applicant.incomeType}
-                    onChange={(e) => set('incomeType', e.target.value as Applicant['incomeType'])}>
+                    onChange={(e) => set('incomeType', e.target.value as ApplicantInput['incomeType'])}>
                     <option value="EMPLOYED">근로소득</option>
                     <option value="SELF_EMPLOYED">사업소득</option>
                     <option value="NO_INCOME">무소득</option>
@@ -337,7 +354,7 @@ export default function DiagnosisPage() {
 
                 <Row label="기존 전세자금대출 보유" required>
                   <select className="inp" value={applicant.existingJeonseLoan}
-                    onChange={(e) => set('existingJeonseLoan', e.target.value as Applicant['existingJeonseLoan'])}>
+                    onChange={(e) => set('existingJeonseLoan', e.target.value as ApplicantInput['existingJeonseLoan'])}>
                     <option value="NONE">없음</option>
                     <option value="HAS_ONE">1건</option>
                     <option value="HAS_MULTIPLE">2건 이상</option>
@@ -431,15 +448,18 @@ export default function DiagnosisPage() {
                   </p>
                 )}
 
-                {property.address && (
+                {property.address.value && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">선택한 매물</p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">{property.address}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">{property.address.value}</p>
+                    {property.jibunAddress && (
+                      <p className="mt-0.5 text-xs text-slate-500">{property.jibunAddress.value}</p>
+                    )}
                     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
                       <div>
                         <dt className="text-slate-400">지역</dt>
                         <dd className="mt-0.5 font-semibold text-slate-700">
-                          {property.region === 'CAPITAL' ? '수도권' : '비수도권'}
+                          {property.region?.value === 'CAPITAL' ? '수도권' : '비수도권'}
                         </dd>
                       </div>
                       {property.propertyTypeLabel && (
@@ -482,8 +502,29 @@ export default function DiagnosisPage() {
                   </ul>
                 )}
 
+                {/* 위반건축물 표시는 건축HUB 공개 API에 없어 사용자가 건축물대장을 열람해 직접 확인해야 한다 */}
+                {property.address.value && (
+                  <Row
+                    label="건축물대장 위반건축물 표시"
+                    required
+                    hint="정부24 또는 세움터에서 건축물대장을 열람하면 상단에 '위반건축물' 표시가 있는지 확인할 수 있습니다. 공개 API로는 조회되지 않아 직접 확인이 필요하며, 확인하지 않으면 진단이 보류됩니다."
+                  >
+                    <select className="inp" value={illegalChoice}
+                      onChange={(e) => setIllegal(e.target.value as IllegalChoice)}>
+                      <option value="UNKNOWN">모름 / 확인 안 됨</option>
+                      <option value="NO">표시 없음</option>
+                      <option value="YES">위반건축물 표시 있음</option>
+                    </select>
+                  </Row>
+                )}
+
                 {/* 매물(주소)이 바뀌면 이전 문서에 대한 확인 상태를 이어받지 않도록 완전히 새로 마운트한다 */}
-                <RegistryReview key={property.address || 'no-property'} onConfirmed={setRegistry} />
+                <RegistryReview
+                  key={property.address.value || 'no-property'}
+                  propertyAddress={property.address.value}
+                  propertyJibunAddress={property.jibunAddress?.value}
+                  onConfirmed={setRegistry}
+                />
 
                 <Nav onPrev={() => setStep(1)} onNext={onRunCheck}
                   nextLabel={loading ? '판정 중…' : '사전점검 실행'} disabled={loading} />
@@ -526,16 +567,24 @@ export default function DiagnosisPage() {
                 </div>
               </div>
 
-              {/* 층별 판정 */}
-              {(['PRODUCT', 'GUARANTEE'] as const).map((layer) => {
+              {result.blockedAt === 'INSUFFICIENT' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-800">
+                  <p className="text-sm font-bold">아래 자료를 보완하면 층별 판정을 볼 수 있습니다</p>
+                  <p className="mt-1.5">
+                    진단에 필요한 값이 부족하거나 서로 맞지 않아 KB 상품요건·HUG 보증요건 대조는 실행하지 않았습니다.
+                    빈 값 위에서 만든 판정을 보여드리지 않기 위한 처리입니다.
+                  </p>
+                </div>
+              )}
+
+              {/* 층별 판정 — 진단자료 충분성 → KB 상품요건 → HUG 보증요건 순 */}
+              {LAYER_ORDER.map((layer) => {
                 const rows = result.results.filter((r) => r.layer === layer);
                 if (rows.length === 0) return null;
                 return (
                   <div key={layer}>
                     <div className="mb-3 flex items-baseline gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">
-                        {layer === 'PRODUCT' ? '1층 · KB 상품요건' : '2층 · HUG 보증요건'}
-                      </h3>
+                      <h3 className="text-sm font-bold text-slate-900">{LAYER_KO[layer]}</h3>
                       <span className="text-xs text-slate-400">{rows.length}개 항목</span>
                     </div>
                     <div className="space-y-2.5">
@@ -599,7 +648,7 @@ export default function DiagnosisPage() {
                   <SummaryRow k="보증금" v={won(contract.deposit)} on={step > 1} />
                   <SummaryRow k="계약기간" v={`${contract.termMonths}개월`} on={step > 1} />
                   <SummaryRow k="중개" v={contract.brokered ? '중개' : '직거래'} on={step > 1} />
-                  <SummaryRow k="매물" v={property.address || '미선택'} on={!!property.address} />
+                  <SummaryRow k="매물" v={property.address.value || '미선택'} on={!!property.address.value} />
                 </dl>
               </div>
 

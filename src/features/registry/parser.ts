@@ -344,6 +344,34 @@ function extractExistingLeaseholdRights(eulgu: Line[]): OcrFieldDraft<boolean> {
   return { value: false, confidence: sectionConfidence, status: 'EXTRACTED' };
 }
 
+// ---------- 표제부: 소재지 (F04 주소 대조용) ----------
+
+// 등기부 첫 줄은 "[집합건물] 서울특별시 마포구 ... 제3층 제301호" 형태로 소재지를 담고 있다.
+// 표의 '소재지번' 칸보다 이 줄이 한 줄에 온전히 들어와 있어 OCR 재구성에 유리하다.
+const DOC_TYPE_RE = /\[\s*(집합건물|건물|토지)\s*\]/;
+const LOCATION_KEYWORD_RE = looseRe('소재지번');
+const MIN_ADDRESS_LEN = 4;
+
+function extractDocumentAddress(lines: Line[]): OcrFieldDraft<string> {
+  for (const l of lines) {
+    const m = l.text.match(DOC_TYPE_RE);
+    if (!m) continue;
+    const after = l.text.slice((m.index ?? 0) + m[0].length).trim();
+    if (after.length < MIN_ADDRESS_LEN) continue;
+    return { value: after, confidence: l.minConfidence, status: statusOf(l.minConfidence), evidence: l.text.trim() };
+  }
+
+  // 첫 줄을 못 읽었을 때의 대비책 — 표제부 '소재지번' 칸 뒤 문자열
+  for (const l of lines) {
+    if (!LOCATION_KEYWORD_RE.test(l.text)) continue;
+    const after = l.text.replace(new RegExp(`^[\\s\\S]*?${LOCATION_KEYWORD_RE.source}`), '').trim();
+    if (after.length < MIN_ADDRESS_LEN) continue;
+    return { value: after, confidence: l.minConfidence, status: statusOf(l.minConfidence), evidence: l.text.trim() };
+  }
+
+  return missingField();
+}
+
 // ---------- 발급일 ----------
 
 const ISSUED_DATE_RE = /(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/;
@@ -374,6 +402,7 @@ export function parseRegistryOcr(fields: OcrTextField[]): RegistryOcrDraft {
     seniorLienTotal: extractSeniorLienTotal(eulgu),
     hasRightsViolation: extractRightsViolation(gapgu),
     existingLeaseholdRights: extractExistingLeaseholdRights(eulgu),
+    documentAddress: extractDocumentAddress(lines),
     issuedDate: extractIssuedDate(lines),
   };
 }

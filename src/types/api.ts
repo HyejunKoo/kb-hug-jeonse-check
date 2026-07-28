@@ -60,6 +60,8 @@ export interface RegistryOcrDraft {
   hasRightsViolation?: OcrFieldDraft<boolean>;
   /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용) */
   existingLeaseholdRights?: OcrFieldDraft<boolean>;
+  /** 표제부 소재지 표기 — 고객이 선택한 매물 주소와 대조하는 데 쓴다 (F04) */
+  documentAddress?: OcrFieldDraft<string>;
   issuedDate?: string;
 }
 

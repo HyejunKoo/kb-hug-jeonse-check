@@ -5,12 +5,14 @@
 // 절대 규칙: 소유자 실명(ownerNameCandidates)과 임대인명은 이 컴포넌트 밖으로 나가지 않는다.
 import { useRef, useState } from 'react';
 import type {
-  OcrErrorResponse, OcrFieldStatus, OcrResponse, OwnerMatchStatus, RegistryInfo, RegistryOcrDraft,
+  AddressMatchStatus, OcrErrorResponse, OcrFieldStatus, OcrResponse, OwnerMatchStatus,
+  RegistryInfo, RegistryOcrDraft,
 } from '@/types';
 import { Row, Toggle } from '@/features/intake/components/fields';
 
 type YesNoUnknown = 'YES' | 'NO' | 'UNKNOWN';
 type OwnerMatchChoice = OwnerMatchStatus | 'UNKNOWN';
+type AddressMatchChoice = AddressMatchStatus | 'UNKNOWN';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -47,7 +49,13 @@ function normalizeName(s: string): string {
   return s.replace(/\s+/g, '').replace(/(주식회사|㈜|유한회사)/g, '');
 }
 
-export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: RegistryInfo | undefined) => void }) {
+export function RegistryReview({ propertyAddress, propertyJibunAddress, onConfirmed }: {
+  /** 3단계에서 선택한 매물 도로명 주소 — 등기부 소재지와 대조해 보여준다 */
+  propertyAddress: string;
+  /** 등기부 소재지는 지번으로 표기되므로 대조에는 이 값이 더 직접적이다 */
+  propertyJibunAddress?: string;
+  onConfirmed: (registry: RegistryInfo | undefined) => void;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileMeta, setFileMeta] = useState<{ name: string; size: number } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -63,6 +71,9 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
   const [leaseholdRights, setLeaseholdRights] = useState<YesNoUnknown>('UNKNOWN');
   const [lienKnown, setLienKnown] = useState(false);
   const [lienAmount, setLienAmount] = useState('');
+  const [docAddress, setDocAddress] = useState('');
+  const [addressMatch, setAddressMatch] = useState<AddressMatchChoice>('UNKNOWN');
+  const [issuedDate, setIssuedDate] = useState('');
 
   const ownerNames = draft?.ownerNameCandidates?.value ?? [];
   const hasCoOwners = ownerNames.length >= 2;
@@ -84,6 +95,9 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
     setLeaseholdRights('UNKNOWN');
     setLienKnown(false);
     setLienAmount('');
+    setDocAddress('');
+    setAddressMatch('UNKNOWN');
+    setIssuedDate('');
     if (fileInputRef.current) fileInputRef.current.value = '';
     clearConfirmed();
   }
@@ -128,6 +142,12 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
         setLienKnown(false);
         setLienAmount('');
       }
+      // 소재지·발급일은 OCR 후보를 채워만 두고, 일치 여부는 고객이 직접 대조해 고르게 한다
+      setDocAddress(
+        data.draft.documentAddress?.status !== 'MISSING' ? (data.draft.documentAddress?.value ?? '') : '',
+      );
+      setAddressMatch('UNKNOWN');
+      setIssuedDate(data.draft.issuedDate ?? '');
     } catch {
       setError('OCR 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
@@ -152,7 +172,15 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
     if (lienKnown && lienAmount.trim() !== '' && Number.isFinite(Number(lienAmount))) {
       registry.seniorLienTotal = { value: Number(lienAmount), source: 'USER_CONFIRMED_DOCUMENT' };
     }
-    if (draft?.issuedDate) registry.issuedDate = draft.issuedDate;
+    if (docAddress.trim() !== '') {
+      registry.documentAddress = { value: docAddress.trim(), source: 'USER_CONFIRMED_DOCUMENT' };
+    }
+    if (addressMatch !== 'UNKNOWN') {
+      registry.addressMatch = { value: addressMatch, source: 'USER_CONFIRMED_DOCUMENT' };
+    }
+    if (issuedDate) {
+      registry.issuedDate = { value: issuedDate, source: 'USER_CONFIRMED_DOCUMENT' };
+    }
     return registry;
   }
 
@@ -229,6 +257,70 @@ export function RegistryReview({ onConfirmed }: { onConfirmed: (registry: Regist
           </div>
 
           <fieldset disabled={confirmed} className="space-y-4 disabled:opacity-60">
+            {/* 이 등기부가 '계약할 그 집'의 것이 맞는지부터 확인한다 — 다른 건물 등기부로 판정하면 결과 전체가 무의미하다 */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">주소 대조</p>
+              <dl className="mt-2 space-y-1.5 text-xs">
+                <div className="flex gap-2">
+                  <dt className="w-20 shrink-0 text-slate-400">선택한 매물</dt>
+                  <dd className="font-semibold text-slate-700">{propertyAddress || '(미선택)'}</dd>
+                </div>
+                {propertyJibunAddress && (
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-slate-400">지번</dt>
+                    <dd className="font-semibold text-slate-700">{propertyJibunAddress}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            <Row
+              label={
+                <span className="inline-flex items-center gap-2">
+                  등기부 소재지 <StatusBadge status={draft.documentAddress?.status} />
+                </span>
+              }
+              hint={
+                draft.documentAddress?.evidence
+                  ? `인식된 문구: ${draft.documentAddress.evidence} — 원본과 다르면 직접 고쳐 주세요.`
+                  : '등기부 첫 줄 또는 표제부 소재지번을 그대로 입력해 주세요.'
+              }
+            >
+              <input
+                className="inp"
+                value={docAddress}
+                onChange={(e) => setDocAddress(e.target.value)}
+                placeholder="예: 서울특별시 마포구 성산동 515-1"
+              />
+            </Row>
+
+            <Row
+              label="등기부 소재지가 위 매물과 같은 건물입니까?"
+              hint="다른 건물의 등기부로는 판정할 수 없습니다. '확인 안 됨'을 고르면 진단이 보류됩니다."
+            >
+              <select
+                className="inp"
+                value={addressMatch}
+                onChange={(e) => setAddressMatch(e.target.value as AddressMatchChoice)}
+              >
+                <option value="UNKNOWN">모름 / 확인 안 됨</option>
+                <option value="MATCHED">예, 같은 건물입니다</option>
+                <option value="NOT_MATCHED">아니요, 다른 건물입니다</option>
+              </select>
+            </Row>
+
+            <Row
+              label="등기사항전부증명서 발급일"
+              hint="문서에 인쇄된 발급일(열람일시)입니다. 발급일로부터 30일이 지난 등기부는 현재 권리관계를 반영한다고 볼 수 없어 진단이 보류됩니다."
+            >
+              <input
+                type="date"
+                className="inp"
+                value={issuedDate}
+                onChange={(e) => setIssuedDate(e.target.value)}
+              />
+            </Row>
+
             <Row
               label={
                 <span className="inline-flex items-center gap-2">
