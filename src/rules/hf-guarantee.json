@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "HF-DEPOSIT-CAP",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HF", "KB_YOUTH_HF"],
+      "label": "HF 보증금 한도",
+      "checkId": "checkDepositCap",
+      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "sourceUrl": "https://www.hf.go.kr/ko/sub02/sub02_05_01.do",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "HF-SENIOR-RATIO",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HF", "KB_YOUTH_HF"],
+      "label": "HF 선순위채권 비율 (단독·다가구 80%+60% / 그 외 60%)",
+      "checkId": "checkHfSeniorRatio",
+      "sourceUrl": "https://www.hf.go.kr/ko/sub02/sub02_05_01.do",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}

@@ -88,13 +88,14 @@ src/
 │  ├─ rule-engine/
 │  │  ├─ index.ts               엔진 본체 (규칙팩 순회 → PathResult)
 │  │  └─ evaluator.ts           개별 체크 함수 + CHECKERS 레지스트리 · 3번
-│  ├─ crawlers/                 KB·HUG 크롤러 + 폴백 provider      · 3번 ⬜
+│  ├─ crawlers/                 KB·HUG·HF·SGI 실크롤러 + 폴백      · 3번 ✅
 │  ├─ supabase/                 server(admin+요청자세션) / client(anon) · 2번 ✅
 │  └─ gemini/client.ts          Gemini 초기화
 ├─ types/                       case.ts / rule.ts / api.ts + 배럴  ← 전원 `@/types`로 import
 └─ rules/
-   ├─ kb-hug.json               규칙팩 (현재 15개)                · 3번 ⬜ 수치 검수 필요
-   └─ hug-guarantee.json        빈 껍데기. 분리할지는 3번이 판단
+   ├─ kb-{hug,hf,sgi}.json / kb-youth-hf.json   상품 규칙팩 4개
+   ├─ guarantee-common.json                      보증 공통 규칙팩
+   └─ {hug,hf,sgi}-guarantee.json                기관 규칙팩 3개
 ```
 
 ✅ 완료 · ⬜ 작업 필요
@@ -103,17 +104,17 @@ src/
 
 ## 4. 규칙 추가하는 법 (3번 필독)
 
-규칙 하나 추가 = **JSON 한 줄 + 함수 하나.** 이미 15번 반복된 패턴이라 따라 하면 된다.
+규칙 하나 추가 = **해당 JSON 규칙 + 함수 하나.** 공통 규칙은 `paths` 배열로 여러 경로에서 재사용한다.
 
-**① `src/rules/kb-hug.json`에 규칙 추가**
+**① 해당 `src/rules/*.json`에 규칙 추가**
 
 ```json
 {
   "ruleId": "HUG-DEPOSIT-CAP",
-  "layer": "GUARANTEE",              // PRODUCT(KB 상품) | GUARANTEE(보증기관)
-  "path": "KB_STAR_HUG",
+  "layer": "GUARANTEE", // PRODUCT(KB 상품) | GUARANTEE(보증기관)
+  "paths": ["KB_STAR_HUG"],
   "label": "보증금 한도 (수도권 7억 / 비수도권 5억)",
-  "checkId": "checkDepositCap",      // ↓ 아래 함수 이름과 일치해야 함
+  "checkId": "checkDepositCap", // ↓ 아래 함수 이름과 일치해야 함
   "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
   "sourceUrl": "https://www.khug.or.kr",
   "effectiveFrom": "2026-07-01"
@@ -128,8 +129,8 @@ const checkDepositCap: Checker = (c, p) => {
   const ok = c.contract.deposit <= cap;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: `보증금 ${won(c.contract.deposit)} — 한도 ${won(cap)}`,  // 어떤 값에 어떤 기준을 적용했는지
-    usedValues: [`보증금 ${won(c.contract.deposit)} (자기신고)`],     // 화면에 "근거"로 표시됨
+    reason: `보증금 ${won(c.contract.deposit)} — 한도 ${won(cap)}`, // 어떤 값에 어떤 기준을 적용했는지
+    usedValues: [`보증금 ${won(c.contract.deposit)} (자기신고)`], // 화면에 "근거"로 표시됨
     nextAction: ok ? '' : '보증금이 한도를 초과합니다. 다른 매물을 검토하세요.',
   };
 };
@@ -148,13 +149,13 @@ const CHECKERS: Record<string, Checker> = {
 
 ### 판정은 이 5개 중 하나만
 
-| 코드 | 언제 쓰나 | 예 |
-|---|---|---|
-| `PUBLIC_REQUIREMENT_UNMET` | 공개 규칙과 명확히 충돌 | 보증금이 한도 초과 |
-| `NO_PUBLIC_CONFLICT_FOUND` | 결격을 못 찾음 (**승인 아님**) | 계약기간 24개월 |
-| `MISSING_INFORMATION` | 판정할 값이 없음 | 등기부 미제출 |
-| `POST_CONTRACT_REQUIREMENT` | 계약 후에 생기는 조건 | 계약금 5% 지급 |
-| `OFFICIAL_REVIEW_REQUIRED` | 우리가 원천적으로 못 함 | 시세, 신용평가, DSR |
+| 코드                        | 언제 쓰나                      | 예                  |
+| --------------------------- | ------------------------------ | ------------------- |
+| `PUBLIC_REQUIREMENT_UNMET`  | 공개 규칙과 명확히 충돌        | 보증금이 한도 초과  |
+| `NO_PUBLIC_CONFLICT_FOUND`  | 결격을 못 찾음 (**승인 아님**) | 계약기간 24개월     |
+| `MISSING_INFORMATION`       | 판정할 값이 없음               | 등기부 미제출       |
+| `POST_CONTRACT_REQUIREMENT` | 계약 후에 생기는 조건          | 계약금 5% 지급      |
+| `OFFICIAL_REVIEW_REQUIRED`  | 우리가 원천적으로 못 함        | 시세, 신용평가, DSR |
 
 **모르는 걸 `UNMET`으로 처리하지 마라.** `MISSING_INFORMATION`과 `INTERNAL_REQUIRED`를 구분하는 게
 이 서비스의 정체성이다.
@@ -198,26 +199,26 @@ cp .env.example .env.local     # 그리고 키 채우기
 
 **키는 노션에 정리돼 있다. 각자 발급받지 말고 노션에서 복사해 붙여넣을 것.**
 
-| 키 | 용도 | 상태 |
-|---|---|---|
-| `JUSO_API_KEY` | 주소 검색 | 노션 |
-| `BUILDING_API_KEY` | 건축HUB 건축물대장 조회 | 노션 |
-| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 진단 결과 저장 | 노션 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인(Auth)·본인 이력 조회 (Supabase 새 키 체계의 publishable key) | 노션 |
-| `GEMINI_API_KEY` | 상담 요약 문장 다듬기 | ⬜ **미발급** — 없어도 동작함 |
+| 키                                                       | 용도                                                                | 상태                          |
+| -------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------- |
+| `JUSO_API_KEY`                                           | 주소 검색                                                           | 노션                          |
+| `BUILDING_API_KEY`                                       | 건축HUB 건축물대장 조회                                             | 노션                          |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 진단 결과 저장                                                      | 노션                          |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`                   | 로그인(Auth)·본인 이력 조회 (Supabase 새 키 체계의 publishable key) | 노션                          |
+| `GEMINI_API_KEY`                                         | 상담 요약 문장 다듬기                                               | ⬜ **미발급** — 없어도 동작함 |
 
 `GEMINI_API_KEY`는 아직 발급 전이라 `.env.local`에 비워두면 된다.
 리포트가 템플릿으로 생성될 뿐 판정·화면에는 영향이 없다. 발급되면 노션에 추가된다.
 
 ### 키가 없으면 어떻게 되나
 
-| 없는 키 | 실제로 벌어지는 일 |
-|---|---|
-| `JUSO_API_KEY` | 주소 검색이 **항상** `서울 서초구 강남대로12길 11 (양재동, 현대아트빌라)` 1건만 반환. **검색어와 무관** |
-| `BUILDING_API_KEY` | 건축물대장이 **항상** 같은 샘플 건물로 반환 |
-| `GEMINI_API_KEY` | 리포트가 템플릿으로 생성됨 (품질만 다름, 내용은 정상) — **현재 상태** |
-| Supabase 키 | 저장만 건너뜀, 판정은 정상 |
-| `USE_FIXTURES=1` | 키가 **있어도** 픽스처 강제. `.env.example`엔 없으니 필요할 때만 직접 추가 |
+| 없는 키            | 실제로 벌어지는 일                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `JUSO_API_KEY`     | 주소 검색이 **항상** `서울 서초구 강남대로12길 11 (양재동, 현대아트빌라)` 1건만 반환. **검색어와 무관** |
+| `BUILDING_API_KEY` | 건축물대장이 **항상** 같은 샘플 건물로 반환                                                             |
+| `GEMINI_API_KEY`   | 리포트가 템플릿으로 생성됨 (품질만 다름, 내용은 정상) — **현재 상태**                                   |
+| Supabase 키        | 저장만 건너뜀, 판정은 정상                                                                              |
+| `USE_FIXTURES=1`   | 키가 **있어도** 픽스처 강제. `.env.example`엔 없으니 필요할 때만 직접 추가                              |
 
 앞의 두 개는 **결과가 틀린다.** 화면에 "지금 샘플 데이터입니다" 표시가 안 나오니,
 주소 검색이 계속 양재동만 나오면 버그를 의심하기 전에 `.env.local`부터 확인할 것.
@@ -248,15 +249,15 @@ cp .env.example .env.local     # 그리고 키 채우기
 
 건드리지 말 것. 이것들 때문에 "내 컴에선 되는데"가 안 생긴다.
 
-| 파일 | 역할 |
-|---|---|
+| 파일                                 | 역할                                                 |
+| ------------------------------------ | ---------------------------------------------------- |
 | `package.json` + `package-lock.json` | 의존성 목록·정확한 버전. `npm ci`가 lock 그대로 설치 |
-| `.nvmrc` (`22`) | nvm 쓰면 `nvm use`로 Node 버전 자동 전환 |
-| `package.json` `engines: 22.x` | Vercel이 이 버전으로 빌드 |
-| `.npmrc` `engine-strict=true` | Node 버전 다르면 `npm ci` 실패시켜 강제 |
-| `.npmrc` `save-exact=true` | 새 패키지 설치 시 `^` 없이 고정 버전으로 기록 |
-| `.gitattributes` | 줄바꿈 LF 통일. Windows/Mac 섞여도 diff 안 깨짐 |
-| `tsconfig.json` / `.eslintrc.json` | 타입·린트 기준 통일 |
+| `.nvmrc` (`22`)                      | nvm 쓰면 `nvm use`로 Node 버전 자동 전환             |
+| `package.json` `engines: 22.x`       | Vercel이 이 버전으로 빌드                            |
+| `.npmrc` `engine-strict=true`        | Node 버전 다르면 `npm ci` 실패시켜 강제              |
+| `.npmrc` `save-exact=true`           | 새 패키지 설치 시 `^` 없이 고정 버전으로 기록        |
+| `.gitattributes`                     | 줄바꿈 LF 통일. Windows/Mac 섞여도 diff 안 깨짐      |
+| `tsconfig.json` / `.eslintrc.json`   | 타입·린트 기준 통일                                  |
 
 **`package-lock.json`은 반드시 커밋한다.** 이게 requirements.txt 역할이라 빼면 통일이 깨진다.
 머지 충돌 나면 직접 편집하지 말고 `git checkout --theirs package-lock.json && npm install` 로 재생성.
@@ -265,14 +266,14 @@ cp .env.example .env.local     # 그리고 키 채우기
 
 ## 8. 알려진 한계 (설계상 확정. 고치려 하지 말 것)
 
-| 항목 | 왜 | 처리 |
-|---|---|---|
-| **위반건축물** | 건축HUB 표제부·기본개요 어디에도 필드가 없음 (2026-07 실호출 확인) | 영구 `자료 부족` + "정부24·세움터에서 열람하세요" |
-| **전용면적** | 표제부(getBrTitleInfo)에는 호별 전용면적이 없음. 전유부(getBrExposInfo) 추가 호출 필요 | 미수집. 현재 면적을 쓰는 규칙이 없어 판정 영향 없음 — 면적 규칙 추가 시 전유부 연동부터 |
-| **주택가격/시세** | KB시세·부동산테크 접근 불가. 참고 시세는 기관 불인정 | 영구 `공식 심사 필요` |
-| **선순위채권 비율** | 시세가 없으니 비율 계산 자체가 불가 | 금액만 표시하고 `공식 심사 필요` |
-| **다가구 선순위 임차보증금** | 등기부에 안 나옴. 다른 세입자 정보라 접근 불가 | `공식 심사 필요` + 임대인에게 확인서 요청 안내 |
-| **타세대 전입** | 전입세대열람내역 필요. 계약 전 확보 불가 | `공식 심사 필요` |
+| 항목                         | 왜                                                                                     | 처리                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **위반건축물**               | 건축HUB 표제부·기본개요 어디에도 필드가 없음 (2026-07 실호출 확인)                     | 영구 `자료 부족` + "정부24·세움터에서 열람하세요"                                       |
+| **전용면적**                 | 표제부(getBrTitleInfo)에는 호별 전용면적이 없음. 전유부(getBrExposInfo) 추가 호출 필요 | 미수집. 현재 면적을 쓰는 규칙이 없어 판정 영향 없음 — 면적 규칙 추가 시 전유부 연동부터 |
+| **주택가격/시세**            | KB시세·부동산테크 접근 불가. 참고 시세는 기관 불인정                                   | 영구 `공식 심사 필요`                                                                   |
+| **선순위채권 비율**          | 시세가 없으니 비율 계산 자체가 불가                                                    | 금액만 표시하고 `공식 심사 필요`                                                        |
+| **다가구 선순위 임차보증금** | 등기부에 안 나옴. 다른 세입자 정보라 접근 불가                                         | `공식 심사 필요` + 임대인에게 확인서 요청 안내                                          |
+| **타세대 전입**              | 전입세대열람내역 필요. 계약 전 확보 불가                                               | `공식 심사 필요`                                                                        |
 
 이걸 자체 추정으로 메우면 세이프홈즈·내집스캔과 똑같아진다. **비워두는 게 기능이다.**
 
@@ -295,22 +296,21 @@ cp .env.example .env.local     # 그리고 키 채우기
 
 ## 10. 지금 상태
 
-| | 상태 |
-|---|---|
-| 프로젝트 세팅·타입·배포 설정 | ✅ |
-| UI (디자인 토큰·스테퍼·결과 카드) | ✅ |
-| F01 신청인·계약 입력 | ✅ |
-| F02 주소검색 → 건축HUB (실연동) | ✅ |
-| F03 등기부 OCR | ⬜ 샘플만 |
-| F04 자료 충분성 검사 | ⬜ 없음 |
-| F05·F06 규칙팩 | ⚠️ 구조는 완성, **수치 미검증** |
-| F07 경로별 조합 | 🔶 `blockedAt`까지는 동작 |
-| F09 근거 표시 | ✅ 판정별 출처·기준일 표시 중 |
-| F10 다음 행동 | 🔶 규칙별 `nextAction` 있음, 종합 권고 없음 |
-| F11 상담 요약 | 🔶 템플릿 생성됨, 동의 절차 없음 |
+|                                   | 상태                                                 |
+| --------------------------------- | ---------------------------------------------------- |
+| 프로젝트 세팅·타입·배포 설정      | ✅                                                   |
+| UI (디자인 토큰·스테퍼·결과 카드) | ✅                                                   |
+| F01 신청인·계약 입력              | ✅                                                   |
+| F02 주소검색 → 건축HUB (실연동)   | ✅                                                   |
+| F03 등기부 OCR                    | ⬜ 샘플만                                            |
+| F04 자료 충분성 검사              | ⬜ 없음                                              |
+| F05·F06 규칙팩                    | ✅ KB 4개 상품 + 공통/HUG/HF/SGI 분리·공식 원문 검수 |
+| F07 경로별 조합                   | 🔶 `blockedAt`까지는 동작                            |
+| F09 근거 표시                     | ✅ 판정별 출처·기준일 표시 중                        |
+| F10 다음 행동                     | 🔶 규칙별 `nextAction` 있음, 종합 권고 없음          |
+| F11 상담 요약                     | 🔶 템플릿 생성됨, 동의 절차 없음                     |
 
 ### 가장 급한 것
 
-**`rules/kb-hug.json`의 수치는 아직 검증되지 않았다.** (연령 19~34, 소득 5천, 보증금 7억 등)
-화면에는 출처 URL과 기준일이 표시되는데 실제 원문 대조를 안 했다.
-"근거 기반 판정"이 이 서비스의 정체성이므로, 발표 전에 반드시 KB 상품공시·HUG 공시 원문으로 검수해야 한다.
+규칙 변경 시 상품팩 4개와 `guarantee-common.json`, 기관별 HUG/HF/SGI 팩의
+`sourceUrl`·`effectiveFrom`을 함께 갱신하고 `/api/rules`에서 4개 경로의 양 층이 모두 존재하는지 확인한다.

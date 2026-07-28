@@ -1,0 +1,72 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "KB-SGI-AGE",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "만 19세 이상",
+      "checkId": "checkAge",
+      "params": { "min": 19, "max": 99 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-HOUSEHOLDER",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "주민등록등본상 세대주",
+      "checkId": "checkHouseholder",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-HOMECOUNT",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "부부합산 주택보유 1주택 이내",
+      "checkId": "checkHomeCount",
+      "params": { "maxHomes": 1 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-BROKERED",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "부동산중개업소를 통한 계약",
+      "checkId": "checkBrokered",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-TERM",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "임대차 계약기간 3개월~3년",
+      "checkId": "checkTermRange",
+      "params": { "minMonths": 3, "maxMonths": 36 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-INCOME-EVIDENCE",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "근로·사업소득 증빙",
+      "checkId": "checkIncomeEvidence",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-SGI-EXISTING-LOAN",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_SGI"],
+      "label": "기존 전세자금대출 중복 제한",
+      "checkId": "checkExistingLoan",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}

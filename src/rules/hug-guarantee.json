@@ -1,6 +1,25 @@
 {
-  "version": "0.1.0",
-  "updatedAt": "2026-07-24",
-  "_comment": "3번 담당: HUG 보증요건 전용 규칙팩. 현재 규칙은 kb-hug.json에 layer='GUARANTEE'로 함께 들어 있다. 분리 작업 시 여기로 옮기고 rule-provider.ts에서 두 팩을 합치도록 수정할 것.",
-  "rules": []
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "HUG-DEPOSIT-CAP",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "HUG 보증금 한도",
+      "checkId": "checkDepositCap",
+      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "HUG-COLLATERAL-RATIO",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "HUG 담보인정 90%·단독/다가구 선순위 80%",
+      "checkId": "checkHugCollateralRatio",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
 }

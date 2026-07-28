@@ -1,6 +1,6 @@
 // src/types/api.ts — API 요청/응답·판정 결과
 import type { DiagnosisCase } from './case';
-import type { Verdict, RuleLayer, PathId, RuleSource } from './rule';
+import type { Verdict, RuleLayer, PathId, RuleSource, GuaranteeProvider } from './rule';
 
 export interface CheckResult {
   ruleId: string;
@@ -17,6 +17,8 @@ export interface CheckResult {
 export interface PathResult {
   path: PathId;
   pathLabel: string;
+  guaranteeProvider: GuaranteeProvider;
+  guaranteeLabel: string;
   blockedAt: 'NONE' | 'PRODUCT' | 'GUARANTEE' | 'INSUFFICIENT';
   results: CheckResult[];
   officialReviewCount: number;
@@ -28,14 +30,16 @@ export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review';
 // ---- 라우트별 계약 ----
 export type CheckRequest = DiagnosisCase;
 export interface CheckResponse {
-  pathResult: PathResult;
+  pathResults: PathResult[];
   ruleVersion: string;
   ruleSource: RuleSource;
   /** 로그인 사용자의 판정만 저장되며 이때만 채워진다 */
   caseId?: string;
 }
 
-export interface BuildingRequest { address: string; }
+export interface BuildingRequest {
+  address: string;
+}
 
 // ---- /api/ocr (F03 등기부 추출) ----
 /** OCR 추출 신뢰도 상태. LOW_CONFIDENCE 기준값은 0.85 (features/registry/parser.ts OCR_CONFIDENCE_THRESHOLD) */
@@ -45,7 +49,7 @@ export interface OcrFieldDraft<T> {
   value?: T;
   confidence: number; // MISSING이면 0
   status: OcrFieldStatus;
-  evidence?: string;  // 판단 근거가 된 원문 일부 (짧은 스니펫만, 문서 전체 미포함)
+  evidence?: string; // 판단 근거가 된 원문 일부 (짧은 스니펫만, 문서 전체 미포함)
 }
 
 /**
@@ -63,7 +67,9 @@ export interface RegistryOcrDraft {
   issuedDate?: string;
 }
 
-export interface OcrResponse { draft: RegistryOcrDraft; }
+export interface OcrResponse {
+  draft: RegistryOcrDraft;
+}
 
 export type OcrErrorCode =
   | 'OCR_NOT_CONFIGURED'
@@ -72,10 +78,18 @@ export type OcrErrorCode =
   | 'OCR_PROVIDER_FAILED'
   | 'RATE_LIMITED';
 
-export interface OcrErrorResponse { error: string; code: OcrErrorCode; }
+export interface OcrErrorResponse {
+  error: string;
+  code: OcrErrorCode;
+}
 
-export interface ReportRequest { pathResult: PathResult; }
-export interface ReportResponse { report: string; llm: boolean; }
+export interface ReportRequest {
+  pathResults: PathResult[];
+}
+export interface ReportResponse {
+  report: string;
+  llm: boolean;
+}
 
 // ---- 저장된 진단 이력 (로그인 사용자 전용) ----
 export interface CaseSummary {
@@ -86,12 +100,14 @@ export interface CaseSummary {
   status: OverallStatus | null;
   ruleVersion: string;
 }
-export interface CaseListResponse { cases: CaseSummary[]; }
+export interface CaseListResponse {
+  cases: CaseSummary[];
+}
 
 export interface CaseDetailResponse {
   id: string;
   createdAt: string;
-  pathResult: PathResult;
+  pathResults: PathResult[];
   status: OverallStatus | null;
   ruleVersion: string;
 }

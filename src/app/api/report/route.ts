@@ -15,7 +15,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '잘못된 요청 본문입니다.' }, { status: 400 });
   }
 
-  const template = buildReportTemplate(body.pathResult);
+  if (!Array.isArray(body.pathResults) || body.pathResults.length === 0) {
+    return NextResponse.json({ error: '판정 결과가 없습니다.' }, { status: 400 });
+  }
+
+  const template = buildReportTemplate(body.pathResults);
   const model = getGeminiModel();
   if (!model) return NextResponse.json({ report: template, llm: false });
 
@@ -23,7 +27,8 @@ export async function POST(req: Request) {
     const prompt = [
       '아래는 전세대출 사전점검 판정 결과다. 은행 상담사가 읽기 좋게 자연스러운 한국어 1페이지 요약으로 다듬어라.',
       '규칙: 아래에 없는 판정·수치·확률을 절대 새로 만들지 마라. 승인 가능성을 언급하지 마라. 항목·수치는 그대로 유지하라.',
-      '', template,
+      '',
+      template,
     ].join('\n');
     const result = await model.generateContent(prompt);
     return NextResponse.json({ report: result.response.text(), llm: true });

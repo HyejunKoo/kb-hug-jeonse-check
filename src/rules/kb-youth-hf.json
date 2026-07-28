@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "KB-YOUTH-AGE",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "청년 연령 만 19~34세",
+      "checkId": "checkAge",
+      "params": { "min": 19, "max": 34 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-HOUSEHOLDER",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "무주택 세대주 또는 예비세대주",
+      "checkId": "checkHouseholder",
+      "params": { "plannedAllowed": true },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-HOMECOUNT",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "부부합산 무주택",
+      "checkId": "checkHomeCount",
+      "params": { "maxHomes": 0 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-INCOME",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "부부합산 연소득 7천만원 이하",
+      "checkId": "checkIncomeCap",
+      "params": { "capBand": "B60_70M" },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-TERM",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "대출기간 1~2년",
+      "checkId": "checkTermRange",
+      "params": { "minMonths": 12, "maxMonths": 24 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-DEPOSIT",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "임차보증금 수도권 7억·그 외 5억 이하",
+      "checkId": "checkDepositCap",
+      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-EXISTING-LOAN",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "기존 전세자금대출 중복 제한",
+      "checkId": "checkExistingLoan",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-YOUTH-DOWNPAYMENT",
+      "layer": "PRODUCT",
+      "paths": ["KB_YOUTH_HF"],
+      "label": "계약금 5% 이상 지급",
+      "checkId": "alwaysPostContract",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=N&page=C103507&prcode=LN20000156",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}
