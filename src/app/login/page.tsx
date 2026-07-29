@@ -1,8 +1,22 @@
 'use client';
-// src/app/login/page.tsx — Supabase Auth 이메일 매직링크/OTP 로그인 (2번 담당)
-import { Suspense, useState, type FormEvent } from 'react';
+// src/app/login/page.tsx — Supabase Auth 이메일+비밀번호 로그인 (2번 담당)
+// 이메일 인증은 회원가입(/signup) 시 1회만. 로그인은 이메일/비밀번호만으로 즉시 처리.
+//
+// 회원가입 확인 메일은 커스텀 SMTP 없이는 템플릿(Source) 편집이 막혀 있어 기본 템플릿을 그대로 쓴다.
+// 기본 템플릿의 링크는 Supabase 호스팅 verify를 거쳐 세션을 URL 해시(#access_token=...)로 돌려주는
+// implicit flow라서 서버 라우트(/auth/confirm)가 아니라 이 페이지가 착지점이다.
+// 해시는 access_token/refresh_token을 직접 파싱해 setSession으로 세션을 만든다
+// (자동감지(detectSessionInUrl)에 기대지 않는다 — 매 렌더마다 새 클라이언트를 만들면 신뢰할 수 없다).
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { getBrowserSupabase } from '@/lib/supabase/client';
+
+function friendlyError(message: string): string {
+  if (message.includes('Invalid login credentials')) return '이메일 또는 비밀번호가 올바르지 않습니다.';
+  if (message.includes('Email not confirmed')) return '이메일 인증이 필요합니다. 가입 시 받은 메일의 링크를 확인해 주세요.';
+  return message;
+}
 
 export default function LoginPage() {
   return (
@@ -16,48 +30,59 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlError = searchParams.get('error');
+  const next = searchParams.get('next') || '/diagnosis/result';
 
-  const supabase = getBrowserSupabase();
+  const [supabase] = useState(() => getBrowserSupabase());
 
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(urlError ?? '');
+  const [confirming, setConfirming] = useState(false);
 
-  async function onSendLink(e: FormEvent) {
-    e.preventDefault();
-    if (!supabase || !email.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      const { error: err } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+  useEffect(() => {
+    if (!supabase) return;
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash.slice(1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (accessToken && refreshToken) {
+      setConfirming(true);
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error: err }) => {
+        if (err) {
+          setError(friendlyError(err.message));
+          setConfirming(false);
+          return;
+        }
+        router.push(next);
+        router.refresh();
       });
-      if (err) setError(err.message);
-      else setSent(true);
-    } finally {
-      setLoading(false);
+      return;
     }
-  }
 
-  async function onVerifyCode(e: FormEvent) {
+    const errorDescription = params.get('error_description');
+    if (errorDescription) setError(errorDescription.replace(/\+/g, ' '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!supabase || !code.trim()) return;
+    if (!supabase || !email.trim() || !password) return;
     setLoading(true);
     setError('');
     try {
-      const { error: err } = await supabase.auth.verifyOtp({
+      const { error: err } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        token: code.trim(),
-        type: 'email',
+        password,
       });
       if (err) {
-        setError(err.message);
+        setError(friendlyError(err.message));
         return;
       }
-      router.push('/diagnosis/result');
+      router.push(next);
       router.refresh();
     } finally {
       setLoading(false);
@@ -79,13 +104,25 @@ function LoginForm() {
     );
   }
 
+  if (confirming) {
+    return (
+      <main className="mx-auto max-w-md px-4 py-16 sm:px-6">
+        <div className="card card-body text-center">
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-lg">✉️</span>
+          <h1 className="mt-4 text-lg font-bold tracking-tight">이메일 인증 확인 중…</h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">잠시만 기다려 주세요.</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-md px-4 py-16 sm:px-6">
       <div className="card card-body">
         <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-lg">🔒</span>
         <h1 className="mt-4 text-center text-lg font-bold tracking-tight">로그인</h1>
         <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
-          이메일로 받은 링크를 클릭하거나, 메일 속 6자리 코드를 입력하세요.
+          이메일과 비밀번호를 입력하세요.
         </p>
 
         {error && (
@@ -94,48 +131,35 @@ function LoginForm() {
           </p>
         )}
 
-        {!sent ? (
-          <form onSubmit={onSendLink} className="mt-6 space-y-3">
-            <input
-              type="email"
-              required
-              className="inp"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoFocus
-            />
-            <button type="submit" className="btn-main w-full" disabled={loading}>
-              {loading ? '전송 중…' : '인증 메일 보내기'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={onVerifyCode} className="mt-6 space-y-3">
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <strong className="text-slate-900">{email}</strong>로 인증 메일을 보냈습니다.
-            </p>
-            <input
-              type="text"
-              inputMode="numeric"
-              required
-              className="inp"
-              placeholder="6자리 코드"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              autoFocus
-            />
-            <button type="submit" className="btn-main w-full" disabled={loading}>
-              {loading ? '확인 중…' : '코드 확인'}
-            </button>
-            <button
-              type="button"
-              className="btn-ghost w-full"
-              onClick={() => { setSent(false); setCode(''); setError(''); }}
-            >
-              이메일 다시 입력
-            </button>
-          </form>
-        )}
+        <form onSubmit={onSubmit} className="mt-6 space-y-3">
+          <input
+            type="email"
+            required
+            className="inp"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+          />
+          <input
+            type="password"
+            required
+            className="inp"
+            placeholder="비밀번호"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="submit" className="btn-main w-full" disabled={loading}>
+            {loading ? '로그인 중…' : '로그인'}
+          </button>
+        </form>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          계정이 없으신가요?{' '}
+          <Link href={`/signup?next=${encodeURIComponent(next)}`} className="font-semibold text-kb-700 underline underline-offset-2">
+            회원가입
+          </Link>
+        </p>
       </div>
     </main>
   );

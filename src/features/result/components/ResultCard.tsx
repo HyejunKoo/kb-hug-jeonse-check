@@ -47,24 +47,32 @@ export function ResultCard({ r }: { r: CheckResult }) {
           </details>
         )}
 
+        {/* F04 충분성 결과는 내부 검사라 외부 출처·시행일·규칙 원산지가 없다. */}
         <p className="mt-3 border-t border-slate-100 pt-2.5 text-[11px] text-slate-400">
-          <a
-            className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600"
-            href={r.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            출처 확인
-          </a>
-          <span className="divide-dot">·</span>
-          {r.effectiveFrom === 'UNCONFIRMED' ? '시행일 미확인' : `시행일 ${r.effectiveFrom}`}
-          <span className="divide-dot">·</span>
-          {r.ruleOrigin === 'CRAWLED'
-            ? '실시간 공시 추출'
-            : r.ruleOrigin === 'SUPABASE_SNAPSHOT'
-              ? '마지막 정상 공시 스냅샷'
-              : 'JSON 폴백'}
-          {r.verifiedAt && ` (${new Date(r.verifiedAt).toLocaleString('ko-KR')})`}
+          {r.sourceUrl ? (
+            <a className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600" href={r.sourceUrl} target="_blank" rel="noreferrer">
+              출처 확인
+            </a>
+          ) : (
+            <span>서비스 내부 검사</span>
+          )}
+          {r.effectiveFrom && (
+            <>
+              <span className="divide-dot">·</span>
+              {r.effectiveFrom === 'UNCONFIRMED' ? '시행일 미확인' : `시행일 ${r.effectiveFrom}`}
+            </>
+          )}
+          {r.ruleOrigin && (
+            <>
+              <span className="divide-dot">·</span>
+              {r.ruleOrigin === 'CRAWLED'
+                ? '실시간 공시 추출'
+                : r.ruleOrigin === 'SUPABASE_SNAPSHOT'
+                  ? '마지막 정상 공시 스냅샷'
+                  : 'JSON 폴백'}
+              {r.verifiedAt && ` (${new Date(r.verifiedAt).toLocaleString('ko-KR')})`}
+            </>
+          )}
           <span className="divide-dot">·</span>
           {r.ruleId}
         </p>

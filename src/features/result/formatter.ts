@@ -1,5 +1,22 @@
 // src/features/result/formatter.ts — 판정 결과 표시·리포트 템플릿 (후속 에이전트 담당)
-import type { PathResult, Verdict } from '@/types';
+import type { PathResult, RuleLayer, Verdict } from '@/types';
+
+/** 결과 화면·리포트에 층을 노출하는 순서 — 자료 충분성이 먼저다 */
+export const LAYER_ORDER: readonly RuleLayer[] = ['SUFFICIENCY', 'PRODUCT', 'GUARANTEE'];
+
+export const LAYER_KO: Record<RuleLayer, string> = {
+  SUFFICIENCY: '진단자료 충분성 검사',
+  PRODUCT: '1층 · KB 상품요건',
+  GUARANTEE: '2층 · HUG 보증요건',
+};
+
+export const BLOCKED_KO: Record<PathResult['blockedAt'], string> = {
+  NONE: '막힌 단계 없음',
+  PRODUCT: '1층 · KB 상품요건에서 막힘',
+  GUARANTEE: '2층 · HUG 보증요건에서 막힘',
+  INSUFFICIENT: '자료 부족으로 판정 보류',
+  ACTION_REQUIRED: 'HUG 보증 실행 전 선행조치 필요',
+};
 
 export const VERDICT_KO: Record<Verdict, string> = {
   PUBLIC_REQUIREMENT_UNMET: '공개요건 미충족',
@@ -49,29 +66,34 @@ export function buildReportTemplate(results: PathResult[]): string {
     ``,
     `※ 경로 간 순위·추천이 아니라 각 공개요건과 입력값의 독립 대조 결과입니다.`,
   ];
-  for (const result of results) {
-    const blocked =
-      result.blockedAt === 'NONE'
-        ? '확인된 공개요건 충돌 없음'
-        : result.blockedAt === 'PRODUCT'
-          ? '상품요건(1층) 충돌'
-          : result.blockedAt === 'GUARANTEE'
-            ? '보증요건(2층) 충돌'
-            : result.blockedAt === 'ACTION_REQUIRED'
-              ? '보증 실행 전 선행조치 필요'
-              : '자료 부족으로 판정 보류';
+  for (const r of results) {
     lines.push(
       ``,
-      `## ${result.pathLabel}`,
-      `보증기관: ${result.guaranteeLabel}`,
-      `요약: ${blocked}`,
-      `공식 심사 필요: ${result.officialReviewCount}건`,
+      `## ${r.pathLabel}`,
+      `보증기관: ${r.guaranteeLabel}`,
+      `막힌 단계: ${BLOCKED_KO[r.blockedAt]}`,
+      `공식 심사 필요: ${r.officialReviewCount}건`,
     );
-    for (const check of result.results) {
-      lines.push(`- [${VERDICT_KO[check.verdict]}] ${check.label}: ${check.reason}`);
-      if (check.nextAction) lines.push(`  → 다음 행동: ${check.nextAction}`);
+    if (r.blockedAt === 'INSUFFICIENT') {
+      lines.push(
+        ``,
+        `※ 진단에 필요한 자료가 부족하거나 서로 맞지 않아 KB 상품요건·HUG 보증요건 대조는 실행하지 않았습니다.`,
+        `   아래 보완 항목을 채운 뒤 다시 진단해야 층별 판정을 볼 수 있습니다.`,
+      );
+    }
+
+    lines.push(``, `### 판정 상세`);
+    for (const layer of LAYER_ORDER) {
+      const rows = r.results.filter((c) => c.layer === layer);
+      if (rows.length === 0) continue;
+      lines.push(``, `#### ${LAYER_KO[layer]}`);
+      for (const c of rows) {
+        lines.push(`- [${VERDICT_KO[c.verdict]}] ${c.label}: ${c.reason}`);
+        if (c.nextAction) lines.push(`  → 다음 행동: ${c.nextAction}`);
+      }
     }
   }
+
   lines.push(``, `※ '확인된 충돌 없음'은 승인·보증 가능을 의미하지 않습니다.`);
   return lines.join('\n');
 }

@@ -9,8 +9,9 @@ export interface CheckResult {
   verdict: Verdict;
   reason: string;
   usedValues: string[];
-  sourceUrl: string;
-  effectiveFrom: string;
+  /** F04 내부 충분성 검사는 외부 출처가 없으므로 비어 있다. */
+  sourceUrl?: string;
+  effectiveFrom?: string;
   ruleOrigin?: RuleSource;
   verifiedAt?: string;
   sourceContentSha256?: string;
@@ -68,6 +69,8 @@ export interface RegistryOcrDraft {
   hasRightsViolation?: OcrFieldDraft<boolean>;
   /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 */
   existingLeaseholdRights?: OcrFieldDraft<boolean>;
+  /** 표제부 소재지 표기 — 고객이 선택한 매물 주소와 대조하는 데 쓴다 (F04) */
+  documentAddress?: OcrFieldDraft<string>;
   issuedDate?: string;
 }
 

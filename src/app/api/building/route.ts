@@ -3,7 +3,7 @@
 // 주소 후보 검색은 /api/address 가 담당한다.
 import { NextResponse } from 'next/server';
 import {
-  jusoToLotCode, regionFromSiNm, pickTitleItem, hubTitleToProperty, resolveHousingType,
+  jusoToLotCode, jusoToProperty, pickTitleItem, hubTitleToProperty, resolveHousingType,
   type JusoItem, type HubTitleItem, type LotCode,
 } from '@/features/building/mapper';
 import hubFixture from '@/features/building/__fixtures__/hub-title.json';
@@ -46,10 +46,7 @@ export async function POST(req: Request) {
 
   const notes: string[] = [];
   const lot = jusoToLotCode(juso);
-  let property: Property = {
-    address: juso.roadAddr ?? juso.jibunAddr ?? '',
-    region: regionFromSiNm(juso.siNm),
-  };
+  let property: Property = jusoToProperty(juso);
 
   try {
     const items = await fetchHubTitle(lot);

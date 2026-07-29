@@ -83,8 +83,8 @@ supabase/        DB 스키마
    | 키                                     | 필수                                            |
    | -------------------------------------- | ----------------------------------------------- |
    | `NEXT_PUBLIC_SUPABASE_URL`             | 로그인·저장 쓸 때                               |
-   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인·저장 쓸 때 (사용자 세션 + RLS)           |
-   | `SUPABASE_SERVICE_ROLE_KEY`            | 관리자 작업만; 현재 사용자 저장 경로에는 미사용 |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인·사용자 판정 저장에 필요                  |
+   | `SUPABASE_SERVICE_ROLE_KEY`            | 규칙 스냅샷 서버 조회·저장에 필요               |
    | `JUSO_API_KEY`                         | 주소 검색                                       |
    | `BUILDING_API_KEY`                     | 건축물대장 조회                                 |
    | `NAVER_CLOVA_OCR_INVOKE_URL`           | 등기부 OCR                                      |

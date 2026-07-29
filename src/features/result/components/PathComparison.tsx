@@ -1,6 +1,6 @@
 import type { PathResult, Verdict } from '@/types';
 import { ResultCard } from './ResultCard';
-import { VERDICT_BADGE, VERDICT_DESC, VERDICT_KO } from '../formatter';
+import { LAYER_KO, LAYER_ORDER, VERDICT_BADGE, VERDICT_DESC, VERDICT_KO } from '../formatter';
 
 const STATUS = {
   NONE: {
@@ -29,6 +29,7 @@ function countsOf(result: PathResult): Partial<Record<Verdict, number>> {
 export function PathComparison({ results }: { results: PathResult[] }) {
   const productCandidates = results.filter(
     (result) =>
+      result.blockedAt !== 'INSUFFICIENT' &&
       !result.results.some(
         (row) => row.layer === 'PRODUCT' && row.verdict === 'PUBLIC_REQUIREMENT_UNMET',
       ),
@@ -76,7 +77,7 @@ export function PathComparison({ results }: { results: PathResult[] }) {
             key={result.path}
             id={result.path}
             className="card scroll-mt-20"
-            open={result.blockedAt === 'NONE' || result.blockedAt === 'ACTION_REQUIRED'}
+            open
           >
             <summary className="cursor-pointer list-none px-5 py-5 sm:px-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -96,16 +97,16 @@ export function PathComparison({ results }: { results: PathResult[] }) {
             </summary>
 
             <div className="space-y-6 border-t border-slate-100 px-4 py-5 sm:px-6">
-              {(['PRODUCT', 'GUARANTEE'] as const).map((layer) => {
+              {LAYER_ORDER.map((layer) => {
                 const rows = result.results.filter((row) => row.layer === layer);
                 if (rows.length === 0) return null;
                 return (
                   <section key={layer}>
                     <div className="mb-3 flex items-baseline gap-2">
                       <h4 className="text-sm font-bold text-slate-900">
-                        {layer === 'PRODUCT'
-                          ? '1층 · KB 상품요건'
-                          : `2층 · ${result.guaranteeProvider} 보증요건`}
+                        {layer === 'GUARANTEE'
+                          ? `2층 · ${result.guaranteeProvider} 보증요건`
+                          : LAYER_KO[layer]}
                       </h4>
                       <span className="text-xs text-slate-400">{rows.length}개 항목</span>
                     </div>

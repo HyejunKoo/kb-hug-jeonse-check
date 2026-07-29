@@ -9,7 +9,12 @@ export type Verdict =
   | 'PRE_GUARANTEE_ACTION_REQUIRED' // 보증 실행 전 해결해야 하는 선행조치
   | 'OFFICIAL_REVIEW_REQUIRED'; // 공식 심사 필요
 
-export type RuleLayer = 'PRODUCT' | 'GUARANTEE';
+/**
+ * SUFFICIENCY는 규칙팩에 들어가지 않는다 — F04(진단자료 충분성 검사)가 자체 생성하는 층이다.
+ * 상품·보증 요건과 달리 외부 공개요건이 아니라 "판정을 시작할 자료가 갖춰졌는가"를 본다.
+ */
+export type RuleLayer = 'SUFFICIENCY' | 'PRODUCT' | 'GUARANTEE';
+/** 현재 판정은 HUG만 실행하며, 나머지는 기존 저장 결과를 읽기 위한 호환 식별자다. */
 export type PathId = 'KB_STAR_HUG' | 'KB_STAR_HF' | 'KB_STAR_SGI' | 'KB_YOUTH_HF';
 export type GuaranteeProvider = 'HUG' | 'HF' | 'SGI';
 

@@ -69,7 +69,7 @@ src/
 │  ├─ page.tsx                  랜딩
 │  ├─ diagnosis/page.tsx        진단 플로우 4단계   ← 공용. 수정 시 아래 "충돌 주의" 참고
 │  ├─ diagnosis/result/         저장된 진단 이력 목록·상세         · 2번 ✅
-│  ├─ login/                    Supabase Auth 이메일 매직링크/OTP  · 2번 ✅
+│  ├─ login/, signup/           Supabase Auth 이메일+비밀번호 (가입 시 1회 이메일 인증) · 2번 ✅
 │  ├─ auth/confirm, auth/signout  Auth 콜백·로그아웃              · 2번 ✅
 │  └─ api/
 │     ├─ address/route.ts       주소 후보 검색                   · 1번 ✅
@@ -227,13 +227,32 @@ cp .env.example .env.local     # 그리고 키 채우기
 노션 페이지도 외부 공유하지 말 것 — 특히 `SUPABASE_SERVICE_ROLE_KEY`는 RLS를 우회하는
 관리자 권한 키라 유출되면 DB 전체가 열린다.
 
-### 로그인(매직링크) 쓰려면 Supabase 대시보드 설정도 필요
+### 로그인은 이메일+비밀번호. 회원가입 때만 이메일 인증 1회
 
-`supabase/schema.sql`을 최신 상태로 다시 실행(`user_id`+RLS 정책 추가분)한 뒤,
-**Auth → Email Templates → Magic Link**의 `{{ .ConfirmationURL }}`을
-`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` 형태로 바꿔야
-`/login`에서 보낸 메일의 링크가 실제로 로그인까지 이어진다. 안 바꿔도 메일 속 6자리 코드
-입력으로는 로그인 가능하다.
+로그인(`/login`)은 `signInWithPassword`라 이메일 발송이 전혀 없다. 이메일 인증은
+**회원가입(`/signup`)** 시 1회만 발생한다.
+
+`supabase/schema.sql`을 최신 상태로 다시 실행(`user_id`+RLS 정책 추가분)해야 한다.
+
+**Email Templates(Confirm signup)는 커스텀 SMTP 없이는 Source 편집이 막혀 있다.**
+커스텀 SMTP를 따로 구축하지 않고, 기본 템플릿(`{{ .ConfirmationURL }}` 그대로)을 그대로 쓰는
+전제로 코드가 짜여 있다: 기본 템플릿의 링크는 Supabase 호스팅 verify를 거쳐 세션을 URL
+해시(`#access_token=...`)로 돌려주는 implicit flow라, 서버 라우트(`/auth/confirm`)가 아니라
+`/login` 페이지가 착지점이다 (`src/app/signup/page.tsx`의 `emailRedirectTo` 참고).
+`/login`은 마운트 시 `onAuthStateChange`를 구독해 세션이 감지되면 자동으로
+`/diagnosis/result`로 이동한다 (`src/app/login/page.tsx`).
+`/auth/confirm` 라우트 자체는 나중에 커스텀 SMTP+커스텀 템플릿(token_hash 방식)으로
+전환할 경우를 위해 남겨뒀다 — 지금 기본 흐름에서는 쓰이지 않는다.
+
+**Auth → URL Configuration → Redirect URLs**에 아래처럼 와일드카드로 등록해야 한다
+(경로 하나하나 추가하면 나중에 리다이렉트 대상 바뀔 때마다 또 막힌다):
+```
+https://<배포주소>/**
+http://localhost:3000/**
+```
+안 넣으면 Supabase가 조용히 Site URL로 리다이렉트를 되돌려버려서, 실제로는 다른 주소로
+보냈는데 이유 없이 `localhost:3000`으로 튕기는 것처럼 보인다 — 인증 메일 링크가 이상한 곳으로
+가면 이 설정부터 확인할 것.
 
 ---
 

@@ -44,6 +44,14 @@ function crawledVersion(rules: Rule[]): string {
   return `crawled-hug-${hash}`;
 }
 
+/**
+ * 규칙팩을 실제로 적용하지 않는 경로(F04에서 판정을 중단한 경우)에서 기록용으로만 쓰는 로컬 기준 버전.
+ * 크롤링을 시도하지 않으므로 외부 호출이 없다 — 판정하지 않기로 한 요청에 크롤링 비용을 물리지 않기 위함.
+ */
+export function getFallbackRuleVersion(): string {
+  return (kbHugJson as RulePack).version;
+}
+
 export async function getRulePack(): Promise<ProvidedRulePack> {
   const stored = await loadActiveRuleSnapshot();
   if (stored.status === 'FOUND') return stored.pack;
