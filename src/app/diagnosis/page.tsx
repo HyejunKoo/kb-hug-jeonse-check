@@ -204,7 +204,7 @@ export default function DiagnosisPage() {
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-2xl font-bold tracking-tight">KB 전세 코파일럿</h1>
           <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-            F05·F06 · 4개 경로
+            F05·F06 · KB HUG MVP
           </span>
         </div>
         <p className="mt-2 text-sm text-slate-500">

@@ -20,13 +20,14 @@ export type Checker = (c: DiagnosisCase, params: Rule['params']) => CheckOutcome
 // ---------- 1층: KB 상품요건 체크 ----------
 
 const checkAge: Checker = (c, p) => {
-  const min = Number(p?.min ?? 19),
-    max = Number(p?.max ?? 99);
+  const min = Number(p?.min ?? 19);
+  const max = p?.max === undefined ? undefined : Number(p.max);
   const age = c.applicant.age;
-  const ok = age >= min && age <= max;
+  const ok = age >= min && (max === undefined || age <= max);
+  const range = max === undefined ? `만 ${min}세 이상` : `만 ${min}~${max}세`;
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: `신고 연령 ${age}세 — 요건 만 ${min}~${max}세`,
+    reason: `신고 연령 ${age}세 — 요건 ${range}`,
     usedValues: [`연령 ${age}세 (자기신고)`],
     nextAction: ok ? '' : '연령 요건이 다른 KB 상품을 확인하세요.',
   };
@@ -241,6 +242,32 @@ const checkNoRightsViolation: Checker = (c) => {
   };
 };
 
+const checkExistingLeaseholdTransfer: Checker = (c) => {
+  const f = c.registry?.existingLeaseholdRights;
+  if (f === undefined) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '등기사항전부증명서에서 현재 유효한 전세권 설정 여부를 확인하지 못함',
+      usedValues: [],
+      nextAction: '등기부를 업로드하고 말소되지 않은 전세권이 있는지 확인해 주세요.',
+    };
+  }
+  if (f.value === false) {
+    return {
+      verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+      reason: '등기부에서 현재 유효한 전세권 설정이 확인되지 않음',
+      usedValues: ['현재 전세권 없음 (고객확인문서)'],
+      nextAction: '',
+    };
+  }
+  return {
+    verdict: 'PRE_GUARANTEE_ACTION_REQUIRED',
+    reason: '등기부에서 현재 유효한 전세권 설정이 확인됨 — HUG 공시상 공사로 이전하거나 말소 필요',
+    usedValues: ['현재 전세권 있음 (고객확인문서)'],
+    nextAction: 'HUG 보증 실행 전에 설정된 전세권을 HUG로 이전하거나 말소할 절차와 시점을 KB에 확인하세요.',
+  };
+};
+
 const checkOwnerMatch: Checker = (c) => {
   const f = c.registry?.ownerMatch;
   if (f === undefined) {
@@ -276,6 +303,48 @@ const checkOwnerMatch: Checker = (c) => {
     usedValues: used,
     nextAction:
       '임대인이 실제 소유자가 맞는지, 대리 계약이라면 위임장·인감증명서를 갖추었는지 확인하세요.',
+  };
+};
+
+const checkIndividualOwner: Checker = (c) => {
+  const ownerType = c.registry?.ownerType;
+  if (!ownerType) {
+    return {
+      verdict: 'MISSING_INFORMATION',
+      reason: '등기부상 임대인 유형이 확인되지 않아 법인 임대인 제외 요건을 판정할 수 없음',
+      usedValues: [],
+      nextAction: '등기부를 업로드하고 소유자 유형을 확인해 주세요.',
+    };
+  }
+  const ok = ownerType.value === 'INDIVIDUAL';
+  return {
+    verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
+    reason: ok
+      ? '등기부상 소유자가 개인으로 확인됨'
+      : '등기부상 소유자가 법인 — HUG 취급 제외 요건과 충돌',
+    usedValues: [
+      `소유자 유형 ${ownerType.value === 'INDIVIDUAL' ? '개인' : '법인'} (고객확인문서)`,
+    ],
+    nextAction: ok
+      ? ''
+      : '법인 임대인 목적물은 HUG 전세금안심대출보증 취급 가능 여부를 KB에 확인하세요.',
+  };
+};
+
+const checkOtherHouseholdOccupancy: Checker = (c) => {
+  if (c.property.propertyType?.value === 'DETACHED') {
+    return {
+      verdict: 'NO_PUBLIC_CONFLICT_FOUND',
+      reason: '단독·다중·다가구는 타 세대 전입 없음 요건의 예외 주택유형',
+      usedValues: [`주택 유형 ${c.property.propertyTypeLabel ?? '단독·다가구'} (건축HUB)`],
+      nextAction: '',
+    };
+  }
+  return {
+    verdict: 'MISSING_INFORMATION',
+    reason: '전입세대확인서가 없어 타 세대 전입 여부를 확인할 수 없음',
+    usedValues: [],
+    nextAction: '전입세대확인서를 확보해 타 세대 전입 여부를 KB 상담 시 확인하세요.',
   };
 };
 
@@ -380,10 +449,18 @@ function missingHousingPrice(
   };
 }
 
-const checkHugCollateralRatio: Checker = (c) => {
-  const noPrice = missingHousingPrice(c, 'HUG', '담보인정비율 90% 및 다가구 선순위 80%');
+const checkHugCollateralRatio: Checker = (c, p) => {
+  const collateralPct = Number(p?.collateralPct ?? 90);
+  const seniorLienPct = Number(p?.seniorLienPct ?? 60);
+  const multiFamilySeniorPct = Number(p?.multiFamilySeniorPct ?? 80);
+  const noPrice = missingHousingPrice(
+    c,
+    'HUG',
+    `주택가액 ${collateralPct}%·선순위 ${seniorLienPct}%·다가구 ${multiFamilySeniorPct}%`,
+  );
   if (noPrice) return noPrice;
   const price = c.property.housingPrice!.value;
+  const houseValue = price * (collateralPct / 100);
   const lien = c.registry?.seniorLienTotal;
   if (!lien) {
     return {
@@ -408,20 +485,40 @@ const checkHugCollateralRatio: Checker = (c) => {
 
   const otherSenior = seniorLease?.value ?? 0;
   const securedTotal = c.contract.deposit + lien.value + otherSenior;
-  const withinNinety = securedTotal <= price * 0.9;
-  const withinDetachedSenior = !detached || lien.value + otherSenior <= price * 0.8;
-  const ok = withinNinety && withinDetachedSenior;
+  const withinCollateral = securedTotal <= houseValue;
+  const withinSeniorLien = lien.value <= houseValue * (seniorLienPct / 100);
+  const withinDetachedSenior =
+    !detached || lien.value + otherSenior <= houseValue * (multiFamilySeniorPct / 100);
+  const ok = withinCollateral && withinSeniorLien && withinDetachedSenior;
+  const exceeded: string[] = [];
+  if (!withinCollateral) exceeded.push(`보증금+선순위 ${collateralPct}%`);
+  if (!withinSeniorLien) exceeded.push(`근저당 주택가액의 ${seniorLienPct}%`);
+  if (!withinDetachedSenior)
+    exceeded.push(`단독·다가구 선순위 주택가액의 ${multiFamilySeniorPct}%`);
   return {
     verdict: ok ? 'NO_PUBLIC_CONFLICT_FOUND' : 'PUBLIC_REQUIREMENT_UNMET',
-    reason: detached
-      ? `보증금+선순위 합계 ${won(securedTotal)} / 주택가격 ${won(price)} — 담보인정 90%와 단독·다가구 선순위 80% ${ok ? '이내' : '초과'}`
-      : `보증금+선순위채권 ${won(securedTotal)} / 주택가격 ${won(price)} — HUG 담보인정 90% ${ok ? '이내' : '초과'}`,
+    reason: ok
+      ? detached
+        ? `보증금+선순위 ${collateralPct}%·근저당 ${seniorLienPct}%·단독/다가구 선순위 ${multiFamilySeniorPct}% 요건 충족`
+        : `보증금+선순위 ${collateralPct}% 및 근저당 ${seniorLienPct}% 요건 충족`
+      : `${exceeded.join('·')} 한도 초과`,
     usedValues: [
       `보증금 ${won(c.contract.deposit)}`,
       `선순위 근저당 ${won(lien.value)}`,
       `공식 주택가격 ${won(price)}`,
+      `HUG 주택가액 ${won(houseValue)}`,
     ],
     nextAction: ok ? '' : 'HUG 보증 한도를 초과하므로 계약 조건이나 다른 매물을 검토하세요.',
+  };
+};
+
+const checkHugInterestBurden: Checker = (_c, p) => {
+  const max = Number(p?.interestBurdenPct ?? 40);
+  return {
+    verdict: 'OFFICIAL_REVIEW_REQUIRED',
+    reason: `연간 인정소득 대비 연간 이자비용 ${max}% 이내 여부는 인정소득·부채·예정 대출조건을 이용한 HUG 공식 산식이 필요`,
+    usedValues: [],
+    nextAction: 'KB 상담 시 HUG 인정소득과 연간 이자비용 산정 결과를 확인하세요.',
   };
 };
 
@@ -510,9 +607,13 @@ export const CHECKERS: Record<string, Checker> = {
   checkNotIllegalBuilding,
   checkMultiFamilyRisk,
   checkNoRightsViolation,
+  checkExistingLeaseholdTransfer,
   checkOwnerMatch,
+  checkIndividualOwner,
+  checkOtherHouseholdOccupancy,
   checkSeniorLienRatio,
   checkHugCollateralRatio,
+  checkHugInterestBurden,
   checkHfSeniorRatio,
   checkSgiSeniorRatio,
   alwaysPostContract,

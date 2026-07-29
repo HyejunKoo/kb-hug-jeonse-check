@@ -18,7 +18,10 @@ export function ResultCard({ r }: { r: CheckResult }) {
         {r.usedValues.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {r.usedValues.map((v) => (
-              <span key={v} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
+              <span
+                key={v}
+                className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600"
+              >
                 {v}
               </span>
             ))}
@@ -31,12 +34,37 @@ export function ResultCard({ r }: { r: CheckResult }) {
           </p>
         )}
 
+        {r.sourceEvidence && r.sourceEvidence.length > 0 && (
+          <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+            <summary className="cursor-pointer font-semibold text-slate-600">
+              실제 공시에서 확인한 문구 {r.sourceEvidence.length}개
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {r.sourceEvidence.map((evidence) => (
+                <li key={evidence}>· {evidence}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         <p className="mt-3 border-t border-slate-100 pt-2.5 text-[11px] text-slate-400">
-          <a className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600" href={r.sourceUrl} target="_blank" rel="noreferrer">
+          <a
+            className="underline decoration-slate-300 underline-offset-2 hover:text-slate-600"
+            href={r.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
             출처 확인
           </a>
           <span className="divide-dot">·</span>
-          기준일 {r.effectiveFrom}
+          {r.effectiveFrom === 'UNCONFIRMED' ? '시행일 미확인' : `시행일 ${r.effectiveFrom}`}
+          <span className="divide-dot">·</span>
+          {r.ruleOrigin === 'CRAWLED'
+            ? '실시간 공시 추출'
+            : r.ruleOrigin === 'SUPABASE_SNAPSHOT'
+              ? '마지막 정상 공시 스냅샷'
+              : 'JSON 폴백'}
+          {r.verifiedAt && ` (${new Date(r.verifiedAt).toLocaleString('ko-KR')})`}
           <span className="divide-dot">·</span>
           {r.ruleId}
         </p>

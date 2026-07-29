@@ -6,6 +6,7 @@ export type Verdict =
   | 'NO_PUBLIC_CONFLICT_FOUND' // 확인된 충돌 없음 (승인 의미 아님)
   | 'MISSING_INFORMATION' // 자료 부족
   | 'POST_CONTRACT_REQUIREMENT' // 계약 후 충족 요건
+  | 'PRE_GUARANTEE_ACTION_REQUIRED' // 보증 실행 전 해결해야 하는 선행조치
   | 'OFFICIAL_REVIEW_REQUIRED'; // 공식 심사 필요
 
 export type RuleLayer = 'PRODUCT' | 'GUARANTEE';
@@ -21,7 +22,14 @@ export interface Rule {
   checkId: string; // rule-engine/evaluator.ts의 체크 함수 키
   params?: Record<string, number | string | boolean>;
   sourceUrl: string;
-  effectiveFrom: string; // YYYY-MM-DD
+  /** 공식 시행일. 공시에서 확인되지 않으면 UNCONFIRMED. */
+  effectiveFrom: string;
+  /** 실크롤링으로 만든 규칙인지 JSON 폴백인지 개별 규칙에도 남긴다. */
+  origin?: RuleSource;
+  /** 실크롤링 검증 시각과 그 응답의 증거. JSON 폴백에는 없다. */
+  verifiedAt?: string;
+  sourceContentSha256?: string;
+  sourceEvidence?: string[];
 }
 
 export interface RulePack {
@@ -54,5 +62,5 @@ export interface CrawlSummary {
   reports: CrawlSourceReport[];
 }
 
-/** 규칙팩이 어디서 왔는지 (크롤링 성공 vs JSON 폴백) */
-export type RuleSource = 'CRAWLED' | 'FALLBACK_JSON';
+/** 규칙팩이 어디서 왔는지 (이번 크롤링/마지막 정상 DB 스냅샷/JSON 폴백) */
+export type RuleSource = 'CRAWLED' | 'SUPABASE_SNAPSHOT' | 'FALLBACK_JSON';

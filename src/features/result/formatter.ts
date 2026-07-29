@@ -6,6 +6,7 @@ export const VERDICT_KO: Record<Verdict, string> = {
   NO_PUBLIC_CONFLICT_FOUND: '확인된 충돌 없음',
   MISSING_INFORMATION: '자료 부족',
   POST_CONTRACT_REQUIREMENT: '계약 후 충족 요건',
+  PRE_GUARANTEE_ACTION_REQUIRED: '보증 전 선행조치 필요',
   OFFICIAL_REVIEW_REQUIRED: '공식 심사 필요',
 };
 
@@ -14,6 +15,7 @@ export const VERDICT_BADGE: Record<Verdict, string> = {
   NO_PUBLIC_CONFLICT_FOUND: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   MISSING_INFORMATION: 'bg-amber-50 text-amber-700 border-amber-200',
   POST_CONTRACT_REQUIREMENT: 'bg-sky-50 text-sky-700 border-sky-200',
+  PRE_GUARANTEE_ACTION_REQUIRED: 'bg-orange-50 text-orange-700 border-orange-200',
   OFFICIAL_REVIEW_REQUIRED: 'bg-slate-100 text-slate-600 border-slate-300',
 };
 
@@ -23,6 +25,7 @@ export const VERDICT_ACCENT: Record<Verdict, string> = {
   NO_PUBLIC_CONFLICT_FOUND: 'bg-emerald-500',
   MISSING_INFORMATION: 'bg-amber-400',
   POST_CONTRACT_REQUIREMENT: 'bg-sky-400',
+  PRE_GUARANTEE_ACTION_REQUIRED: 'bg-orange-500',
   OFFICIAL_REVIEW_REQUIRED: 'bg-slate-400',
 };
 
@@ -33,6 +36,8 @@ export const VERDICT_DESC: Record<Verdict, string> = {
     '공개 요건과 대조했을 때 걸리는 항목이 발견되지 않았습니다. 승인 의미가 아닙니다.',
   MISSING_INFORMATION: '판정에 필요한 값이 확보되지 않았습니다.',
   POST_CONTRACT_REQUIREMENT: '계약 이후 절차에서 충족해야 하는 요건입니다.',
+  PRE_GUARANTEE_ACTION_REQUIRED:
+    '현재 상태로는 보증을 실행할 수 없어 이전·말소 등 선행조치가 필요합니다.',
   OFFICIAL_REVIEW_REQUIRED: '계약 전 확인이 불가해 기관의 공식 심사가 필요합니다.',
 };
 
@@ -52,7 +57,9 @@ export function buildReportTemplate(results: PathResult[]): string {
           ? '상품요건(1층) 충돌'
           : result.blockedAt === 'GUARANTEE'
             ? '보증요건(2층) 충돌'
-            : '자료 부족으로 판정 보류';
+            : result.blockedAt === 'ACTION_REQUIRED'
+              ? '보증 실행 전 선행조치 필요'
+              : '자료 부족으로 판정 보류';
     lines.push(
       ``,
       `## ${result.pathLabel}`,

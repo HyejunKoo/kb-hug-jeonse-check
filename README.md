@@ -1,9 +1,9 @@
-# KB 전세 코파일럿 (KB 4개 상품 × 보증기관 사전점검)
+# KB 전세 코파일럿 (KB스타 HUG MVP)
 
-계약금 지급 전, 신청인·계약·매물 조건을 **KB 상품요건(1층) × HUG/HF/SGI 보증요건(2층)** 에 대조해
+계약금 지급 전, 신청인·계약·매물 조건을 **KB스타 HUG 상품요건(1층) × HUG 보증요건(2층)** 에 대조해
 **어느 층에서 왜 막히는지** 근거와 함께 보여주는 사전점검 서비스.
 
-`KB스타(HUG)`·`KB스타(HF)`·`KB스타(SGI)`·`KB 청년 맞춤형(HF)` 4개 경로를 같은 입력으로 병렬 판정한다.
+MVP에서는 `KB스타 전세자금대출(HUG)` 한 경로만 판정한다.
 
 예측하지 않는다. 공개요건과 입력값을 결정론적으로 대조만 한다.
 판정은 `src/lib/rule-engine/` 순수 함수만 수행하고, Gemini는 상담 요약 문장을 다듬는 역할만 한다.
@@ -69,7 +69,7 @@ supabase/        DB 스키마
 | `POST /api/address`  | `{ address }` → `{ candidates: JusoItem[], notes }`          |
 | `POST /api/building` | `{ juso }` → `{ property, housing, notes }`                  |
 | `POST /api/check`    | `DiagnosisCase` → `{ pathResults, ruleVersion, ruleSource }` |
-| `POST /api/ocr`      | (추후 FormData PDF) → `{ registry }`                         |
+| `POST /api/ocr`      | `multipart/form-data { file: PDF\|JPG\|PNG }` → `{ draft }`  |
 | `POST /api/report`   | `{ pathResults }` → `{ report, llm }`                        |
 | `GET /api/rules`     | 현재 규칙팩 + 공식 페이지별 HTTP·문구 검증 결과 (`crawl`)    |
 
@@ -80,13 +80,18 @@ supabase/        DB 스키마
 1. vercel.com → Add New Project → repo import (Next.js 자동 감지, `vercel.json` 불필요)
 2. Settings → Environment Variables 에 아래 입력
 
-   | 키                          | 필수                                           |
-   | --------------------------- | ---------------------------------------------- |
-   | `NEXT_PUBLIC_SUPABASE_URL`  | 저장 쓸 때                                     |
-   | `SUPABASE_SERVICE_ROLE_KEY` | 저장 쓸 때                                     |
-   | `JUSO_API_KEY`              | 주소 검색                                      |
-   | `BUILDING_API_KEY`          | 건축물대장 조회                                |
-   | `GEMINI_API_KEY`            | 미발급 — 넣지 않아도 됨 (템플릿 리포트로 동작) |
+   | 키                                     | 필수                                            |
+   | -------------------------------------- | ----------------------------------------------- |
+   | `NEXT_PUBLIC_SUPABASE_URL`             | 로그인·저장 쓸 때                               |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인·저장 쓸 때 (사용자 세션 + RLS)           |
+   | `SUPABASE_SERVICE_ROLE_KEY`            | 관리자 작업만; 현재 사용자 저장 경로에는 미사용 |
+   | `JUSO_API_KEY`                         | 주소 검색                                       |
+   | `BUILDING_API_KEY`                     | 건축물대장 조회                                 |
+   | `NAVER_CLOVA_OCR_INVOKE_URL`           | 등기부 OCR                                      |
+   | `NAVER_CLOVA_OCR_SECRET`               | 등기부 OCR                                      |
+   | `OCR_RATE_LIMIT_PER_IP_PER_HOUR`       | OCR 시간당 제한                                 |
+   | `OCR_RATE_LIMIT_DAILY_TOTAL`           | OCR 일일 제한                                   |
+   | `GEMINI_API_KEY`                       | 미발급 — 넣지 않아도 됨 (템플릿 리포트로 동작)  |
 
 3. `main` push = 자동 배포, PR 브랜치 = 프리뷰 URL (QA 링크로 사용)
 
@@ -102,15 +107,18 @@ supabase/        DB 스키마
 
 1. supabase.com 프로젝트 생성
 2. SQL Editor에 `supabase/schema.sql` 실행
-3. Project Settings → API 에서 URL·service_role 키 복사 → env에 입력
+3. Project Settings → API 에서 URL·publishable 키 복사 → env에 입력
 
-RLS 활성화 상태이며 서버(service_role)만 접근한다. anon 접근은 차단.
+`diagnosis_cases`는 RLS가 활성화되어 있고 사용자 세션을 가진 publishable-key 클라이언트로 본인 행만 접근한다.
+`rule_snapshots`는 공개 클라이언트에 노출하지 않고 서버의 `service_role`만 저장·조회한다. 일반 판정 요청은 항상 활성 DB 스냅샷을 먼저 사용한다. DB 조회가 성공했지만 활성 행이 없는 최초 부트스트랩에서만 실크롤링하고, 성공 시 `save_rule_snapshot` RPC가 새 버전을 원자적으로 활성화한다. DB 조회 오류 또는 최초 크롤링 실패 시 정적 JSON으로 폴백한다.
+
+`active`는 개별 규칙의 사용 여부가 아니라 규칙팩 스냅샷 버전 전체의 최신 상태를 뜻한다. 새 공시 버전을 저장하면 이전 스냅샷은 감사 이력으로 `active=false`, 최신 스냅샷 하나만 `active=true`가 되며 고객 판정에는 최신 활성 팩만 사용한다.
 
 ## 현재 상태
 
 기능별 완료 현황과 남은 작업은 [TEAM_GUIDE.md §10](TEAM_GUIDE.md#10-지금-상태) 에 정리돼 있다.
 
-F05/F06 규칙팩은 상품 4개, 보증 공통, HUG/HF/SGI 기관별 파일로 분리되어 있다.
-기준 URL·검수일은 각 JSON 규칙에 함께 저장한다.
-서버는 공식 페이지 7개를 실제 조회해 핵심 문구가 모두 일치할 때만 `CRAWLED`를 사용하며,
-일시 오류·문구 변경 시 전체 JSON 팩으로 폴백한다. 성공 결과는 프로세스에서 1시간 캐시한다.
+실제 공식 페이지 응답과 기획 규칙의 차이, 공개정보로 알 수 없는 값, 확정·미확정 의사결정은
+[CRAWLING_AUDIT.md](CRAWLING_AUDIT.md)에 기록한다.
+
+F05/F06의 일반 판정은 Supabase의 활성 규칙을 `SUPABASE_SNAPSHOT`으로 읽으며 프로세스 메모리 캐시를 사용하지 않는다. 활성 규칙이 한 건도 없을 때만 KB HUG 상품 공시와 HUG 전세금안심대출보증 공시 두 URL을 조회한다. HTTP·필수 문구·수치 추출이 모두 성공하면 본문에서 만든 규칙을 `CRAWLED`로 반환하고 DB에 저장한다. 이때 각 규칙에 추출 시각, 원문 응답 SHA-256, 근거 문구가 포함된다. DB 조회 오류 또는 최초 크롤링 실패 시 `kb-hug.json`과 `hug-guarantee.json`을 `FALLBACK_JSON`으로 사용한다.

@@ -11,6 +11,10 @@ export interface CheckResult {
   usedValues: string[];
   sourceUrl: string;
   effectiveFrom: string;
+  ruleOrigin?: RuleSource;
+  verifiedAt?: string;
+  sourceContentSha256?: string;
+  sourceEvidence?: string[];
   nextAction: string;
 }
 
@@ -19,13 +23,13 @@ export interface PathResult {
   pathLabel: string;
   guaranteeProvider: GuaranteeProvider;
   guaranteeLabel: string;
-  blockedAt: 'NONE' | 'PRODUCT' | 'GUARANTEE' | 'INSUFFICIENT';
+  blockedAt: 'NONE' | 'PRODUCT' | 'GUARANTEE' | 'INSUFFICIENT' | 'ACTION_REQUIRED';
   results: CheckResult[];
   officialReviewCount: number;
 }
 
 /** diagnosis_cases.status — 종합 판정 상태 (DB enum과 1:1) */
-export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review';
+export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review' | 'needs_action';
 
 // ---- 라우트별 계약 ----
 export type CheckRequest = DiagnosisCase;
@@ -62,7 +66,7 @@ export interface RegistryOcrDraft {
   ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
   seniorLienTotal?: OcrFieldDraft<number>;
   hasRightsViolation?: OcrFieldDraft<boolean>;
-  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용) */
+  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 */
   existingLeaseholdRights?: OcrFieldDraft<boolean>;
   issuedDate?: string;
 }

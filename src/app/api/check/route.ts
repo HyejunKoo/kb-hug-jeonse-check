@@ -13,6 +13,7 @@ function toOverallStatus(results: PathResult[]): OverallStatus {
   const candidates = results.filter((r) => r.blockedAt === 'NONE');
   if (candidates.some((r) => r.officialReviewCount === 0)) return 'pass';
   if (candidates.length > 0) return 'needs_review';
+  if (results.some((r) => r.blockedAt === 'ACTION_REQUIRED')) return 'needs_action';
   if (results.some((r) => r.blockedAt === 'INSUFFICIENT')) return 'insufficient';
   return 'fail';
 }
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     diag.property.region = parseRegion(diag.property.address);
   }
 
-  const pack = await getRulePack(); // 크롤링 캐시 or JSON 폴백
+  const pack = await getRulePack(); // Supabase 활성 규칙, 최초 부트스트랩, 또는 JSON 폴백
   const pathResults = runAllRulePacks(diag, pack);
 
   let caseId: string | undefined;

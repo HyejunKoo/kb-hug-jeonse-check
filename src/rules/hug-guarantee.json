@@ -1,25 +1,128 @@
 {
-  "version": "1.0.0",
-  "updatedAt": "2026-07-28",
+  "version": "hug-mvp-1.0.0",
+  "updatedAt": "2026-07-29",
   "rules": [
+    {
+      "ruleId": "HUG-PROPERTY-TYPE",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "HUG 보증 대상 주택유형",
+      "checkId": "checkEligiblePropertyType",
+      "params": { "allowed": "APT,MULTI_UNIT,DETACHED,OFFICETEL" },
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-TERM",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "전세계약기간 1년 이상",
+      "checkId": "checkTermMin",
+      "params": { "minMonths": 12 },
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
     {
       "ruleId": "HUG-DEPOSIT-CAP",
       "layer": "GUARANTEE",
       "paths": ["KB_STAR_HUG"],
-      "label": "HUG 보증금 한도",
+      "label": "HUG 보증금 수도권 7억·그 외 5억 이하",
       "checkId": "checkDepositCap",
       "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
       "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
-      "effectiveFrom": "2026-07-28"
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-BROKERED",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "공인중개사가 확인·날인한 전세계약",
+      "checkId": "checkBrokered",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-OWNER-MATCH",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "주택 건물·토지의 동일 임대인 소유",
+      "checkId": "checkOwnerMatch",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-INDIVIDUAL-OWNER",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "임대인이 법인이 아닐 것",
+      "checkId": "checkIndividualOwner",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-NO-RIGHTS-VIOLATION",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "소유권 권리침해 없음",
+      "checkId": "checkNoRightsViolation",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-NOT-ILLEGAL-BUILDING",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "건축물대장상 위반건축물 아님",
+      "checkId": "checkNotIllegalBuilding",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-NO-OTHER-HOUSEHOLD",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "전입세대확인서상 타 세대 전입 없음",
+      "checkId": "checkOtherHouseholdOccupancy",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
       "ruleId": "HUG-COLLATERAL-RATIO",
       "layer": "GUARANTEE",
       "paths": ["KB_STAR_HUG"],
-      "label": "HUG 담보인정 90%·단독/다가구 선순위 80%",
+      "label": "HUG 주택가액 90%·선순위 60%·다가구 80%",
       "checkId": "checkHugCollateralRatio",
+      "params": { "collateralPct": 90, "seniorLienPct": 60, "multiFamilySeniorPct": 80 },
       "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
-      "effectiveFrom": "2026-07-28"
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-INTEREST-BURDEN",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "연간 인정소득 대비 연간 이자비용 40% 이내",
+      "checkId": "checkHugInterestBurden",
+      "params": { "interestBurdenPct": 40 },
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-MOVE-IN-FIXED-DATE",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "주택 인도·전입신고·확정일자",
+      "checkId": "alwaysPostContract",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "HUG-LEASEHOLD-TRANSFER",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG"],
+      "label": "설정된 전세권의 HUG 이전 또는 말소",
+      "checkId": "checkExistingLeaseholdTransfer",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "UNCONFIRMED"
     }
   ]
 }

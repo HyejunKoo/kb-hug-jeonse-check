@@ -9,6 +9,10 @@ const STATUS = {
   },
   PRODUCT: { label: 'KB 상품요건 충돌', tone: 'border-red-200 bg-red-50 text-red-700' },
   GUARANTEE: { label: '보증기관 요건 충돌', tone: 'border-red-200 bg-red-50 text-red-700' },
+  ACTION_REQUIRED: {
+    label: '보증 실행 전 선행조치 필요',
+    tone: 'border-orange-200 bg-orange-50 text-orange-700',
+  },
   INSUFFICIENT: {
     label: '자료 부족으로 판정 보류',
     tone: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -34,7 +38,7 @@ export function PathComparison({ results }: { results: PathResult[] }) {
     <div className="space-y-6">
       <section className="card card-body">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          4개 상품 병렬 대조
+          KB HUG 상품·보증 2층 대조
         </p>
         <h2 className="mt-1.5 text-xl font-bold tracking-tight">
           상품 공개요건 충돌 없음 {productCandidates.length}개
@@ -72,7 +76,7 @@ export function PathComparison({ results }: { results: PathResult[] }) {
             key={result.path}
             id={result.path}
             className="card scroll-mt-20"
-            open={result.blockedAt === 'NONE'}
+            open={result.blockedAt === 'NONE' || result.blockedAt === 'ACTION_REQUIRED'}
           >
             <summary className="cursor-pointer list-none px-5 py-5 sm:px-6">
               <div className="flex flex-wrap items-start justify-between gap-3">

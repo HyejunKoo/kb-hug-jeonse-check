@@ -48,6 +48,7 @@ function decodeEntities(text: string): string {
     lsquo: '‘',
     rsquo: '’',
     le: '≤',
+    middot: '·',
   };
   return text
     .replace(/&#(\d+);/g, (_, value: string) => String.fromCodePoint(Number(value)))

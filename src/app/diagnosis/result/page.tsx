@@ -9,6 +9,7 @@ const BLOCKED_KO: Record<PathResult['blockedAt'], string> = {
   NONE: '막힌 단계 없음',
   PRODUCT: '1층 · KB 상품요건에서 막힘',
   GUARANTEE: '2층 · HUG 보증요건에서 막힘',
+  ACTION_REQUIRED: 'HUG 보증 실행 전 선행조치 필요',
   INSUFFICIENT: '자료 부족으로 판정 보류',
 };
 
@@ -16,6 +17,7 @@ const BLOCKED_TONE: Record<PathResult['blockedAt'], string> = {
   NONE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   PRODUCT: 'bg-red-50 text-red-700 border-red-200',
   GUARANTEE: 'bg-red-50 text-red-700 border-red-200',
+  ACTION_REQUIRED: 'bg-orange-50 text-orange-700 border-orange-200',
   INSUFFICIENT: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 

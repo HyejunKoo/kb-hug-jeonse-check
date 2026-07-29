@@ -30,6 +30,7 @@ export function normalizeStoredResults(value: unknown): PathResult[] {
 
 export function aggregateBlockedAt(results: PathResult[]): PathResult['blockedAt'] {
   if (results.some((result) => result.blockedAt === 'NONE')) return 'NONE';
+  if (results.some((result) => result.blockedAt === 'ACTION_REQUIRED')) return 'ACTION_REQUIRED';
   if (results.some((result) => result.blockedAt === 'INSUFFICIENT')) return 'INSUFFICIENT';
   if (results.some((result) => result.blockedAt === 'GUARANTEE')) return 'GUARANTEE';
   return 'PRODUCT';
