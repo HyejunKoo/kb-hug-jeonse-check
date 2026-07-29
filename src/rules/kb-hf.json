@@ -1,0 +1,82 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "KB-HF-AGE",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "민법상 성년",
+      "checkId": "checkAge",
+      "params": { "min": 19, "max": 99 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-HOUSEHOLDER",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "민법상 성년인 세대주",
+      "checkId": "checkHouseholder",
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-HOMECOUNT",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "부부합산 주택보유 1주택 이내",
+      "checkId": "checkHomeCount",
+      "params": { "maxHomes": 1 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-BROKERED",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "공인중개업소를 통한 계약",
+      "checkId": "checkBrokered",
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-TERM",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "대출기간 1~2년",
+      "checkId": "checkTermRange",
+      "params": { "minMonths": 12, "maxMonths": 24 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-DEPOSIT",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "임차보증금 수도권 7억·그 외 5억 이하",
+      "checkId": "checkDepositCap",
+      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-EXISTING-LOAN",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "기존 전세자금대출 중복 제한",
+      "checkId": "checkExistingLoan",
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "KB-HF-DOWNPAYMENT",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HF"],
+      "label": "계약금 5% 이상 지급",
+      "checkId": "alwaysPostContract",
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001362",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}

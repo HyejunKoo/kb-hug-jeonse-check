@@ -13,15 +13,20 @@ import type { CheckRequest, OverallStatus, PathResult, RuleSource } from '@/type
 
 export const maxDuration = 30;
 
-const PATH_ID = 'KB_STAR_HUG' as const;
-const PATH_LABEL = 'KB스타 전세자금대출 (HUG)';
-
-function toOverallStatus(r: PathResult): OverallStatus {
-  if (r.blockedAt === 'PRODUCT' || r.blockedAt === 'GUARANTEE') return 'fail';
-  if (r.blockedAt === 'INSUFFICIENT') return 'insufficient';
-  if (r.officialReviewCount > 0) return 'needs_review';
+function toOverallStatus(results: PathResult[]): OverallStatus {
+  if (results.some((r) => r.blockedAt === 'PRODUCT' || r.blockedAt === 'GUARANTEE')) return 'fail';
+  if (results.some((r) => r.blockedAt === 'ACTION_REQUIRED')) return 'needs_action';
+  if (results.some((r) => r.blockedAt === 'INSUFFICIENT')) return 'insufficient';
+  if (results.some((r) => r.officialReviewCount > 0)) return 'needs_review';
   return 'pass';
 }
+
+const HUG_PATH = {
+  path: 'KB_STAR_HUG',
+  pathLabel: 'KB스타 전세자금대출 (HUG)',
+  guaranteeProvider: 'HUG',
+  guaranteeLabel: '주택도시보증공사(HUG)',
+} as const;
 
 export async function POST(req: Request) {
   let diag: CheckRequest;
@@ -53,8 +58,7 @@ export async function POST(req: Request) {
     // 판정을 중단하기로 한 요청이라 규칙팩도 가져오지 않는다 — 크롤러가 붙으면 외부 호출이 따라온다.
     // 적용된 규칙이 하나도 없으므로 버전은 "어느 기준의 F04였나"를 남기는 로컬 값만 기록한다.
     pathResult = {
-      path: PATH_ID,
-      pathLabel: PATH_LABEL,
+      ...HUG_PATH,
       blockedAt: 'INSUFFICIENT',
       results: sufficiencyResults,
       officialReviewCount: 0,
@@ -62,26 +66,31 @@ export async function POST(req: Request) {
     ruleVersion = getFallbackRuleVersion();
     ruleSource = 'FALLBACK_JSON';
   } else {
-    const pack = await getRulePack(); // 크롤링 캐시 or JSON 폴백
+    const pack = await getRulePack(); // Supabase 활성 규칙 → 최초 부트스트랩 크롤링 → JSON 폴백
     const ruleResult = runRulePack(diag, pack);
     pathResult = { ...ruleResult, results: [...sufficiencyResults, ...ruleResult.results] };
     ruleVersion = pack.version;
     ruleSource = pack.source;
   }
 
+  // 응답·저장 형식은 과거 다중 경로와 호환되는 배열을 유지하지만 MVP 실행 경로는 HUG 하나뿐이다.
+  const pathResults = [pathResult];
+
   let caseId: string | undefined;
   const supabase = getServerSupabase();
   if (supabase) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       const { data, error } = await supabase
         .from('diagnosis_cases')
         .insert({
           user_id: user.id,
           payload: diag,
-          result: pathResult,
+          result: pathResults,
           rule_version: ruleVersion,
-          status: toOverallStatus(pathResult),
+          status: toOverallStatus(pathResults),
         })
         .select('id')
         .single();
@@ -90,5 +99,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ pathResult, ruleVersion, ruleSource, caseId });
+  return NextResponse.json({
+    pathResults,
+    ruleVersion,
+    ruleSource,
+    caseId,
+  });
 }

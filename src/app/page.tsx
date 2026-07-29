@@ -5,12 +5,12 @@ const LAYERS = [
   {
     tag: '1층',
     title: 'KB 상품요건',
-    desc: '연령·세대주·소득 구간·주택 보유 등 KB스타 전세자금대출(HUG) 상품이 요구하는 조건',
+    desc: '연령·세대주·주택 보유·계약기간 등 KB스타 HUG 전세자금대출이 요구하는 조건',
   },
   {
     tag: '2층',
-    title: 'HUG 보증요건',
-    desc: '주택 유형·보증금 한도·계약 형태 등 주택도시보증공사 보증이 요구하는 조건',
+    title: 'HUG·HF·SGI 보증요건',
+    desc: '주택 유형·권리침해·소유자 일치·기관별 선순위 비율 등 보증서 발급에 필요한 공개 조건',
   },
 ];
 
@@ -39,8 +39,9 @@ export default function Home() {
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-slate-600">
               내 조건과 선택한 매물을 <b className="font-semibold text-slate-900">KB 상품요건</b>과{' '}
-              <b className="font-semibold text-slate-900">HUG 보증요건</b> 두 층에 각각 대조합니다.
-              예측하지 않고, 공개된 요건과 입력값을 그대로 비교해 근거와 출처를 붙여 보여줍니다.
+              <b className="font-semibold text-slate-900">HUG·HF·SGI 보증요건</b> 두 층에 각각
+              대조합니다. 예측하지 않고, 공개된 요건과 입력값을 그대로 비교해 근거와 출처를 붙여
+              보여줍니다.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -58,7 +59,8 @@ export default function Home() {
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
         <h2 className="text-lg font-bold tracking-tight">두 개의 층을 따로 봅니다</h2>
         <p className="mt-1.5 text-sm text-slate-500">
-          KB 상품 규정과 HUG 보증 규정은 서로 다릅니다. 합쳐서 하나로 판정하지 않고 층별로 나눠 보여줍니다.
+          KB 상품 규정과 각 보증기관 규정은 서로 다릅니다. 합쳐서 하나로 판정하지 않고 층별로 나눠
+          보여줍니다.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -100,20 +102,29 @@ export default function Home() {
             <li className="flex gap-2">
               <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-slate-400" />
               <span>
-                <b className="font-semibold text-slate-900">&lsquo;확인된 충돌 없음&rsquo;은 승인이 아닙니다.</b>{' '}
+                <b className="font-semibold text-slate-900">
+                  &lsquo;확인된 충돌 없음&rsquo;은 승인이 아닙니다.
+                </b>{' '}
                 공개된 요건과 대조했을 때 걸리는 항목이 발견되지 않았다는 뜻입니다.
               </span>
             </li>
             <li className="flex gap-2">
               <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-slate-400" />
-              <span>선순위채권 비율처럼 공식 시세가 필요한 항목은 계약 전 판단이 불가해 &lsquo;공식 심사 필요&rsquo;로 표시합니다.</span>
+              <span>
+                선순위채권 비율처럼 공식 시세가 필요한 항목은 계약 전 판단이 불가해 &lsquo;공식 심사
+                필요&rsquo;로 표시합니다.
+              </span>
             </li>
             <li className="flex gap-2">
               <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-slate-400" />
-              <span>조회에 실패한 정보는 추정하지 않고 &lsquo;자료 부족&rsquo;으로 남겨 둡니다.</span>
+              <span>
+                조회에 실패한 정보는 추정하지 않고 &lsquo;자료 부족&rsquo;으로 남겨 둡니다.
+              </span>
             </li>
           </ul>
-          <Link href="/diagnosis" className="btn-main mt-6">사전점검 시작</Link>
+          <Link href="/diagnosis" className="btn-main mt-6">
+            사전점검 시작
+          </Link>
         </div>
       </section>
     </main>

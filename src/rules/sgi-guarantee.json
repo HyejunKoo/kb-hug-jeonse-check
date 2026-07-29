@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "SGI-DEPOSIT-CAP",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_SGI"],
+      "label": "SGI 반환보증 보증금 한도",
+      "checkId": "checkDepositCap",
+      "params": {
+        "capitalCap": 1000000000,
+        "nonCapitalCap": 1000000000,
+        "apartmentUnlimited": true
+      },
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "SGI-SENIOR-RATIO",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_SGI"],
+      "label": "선순위 설정액+전세대출금 시세 80% 이내",
+      "checkId": "checkSgiSeniorRatio",
+      "sourceUrl": "https://obank.kbstar.com/quics?QSL=F&cc=b104363%3Ab104516&isNew=Y&page=C103507&prcode=LN20001363",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}

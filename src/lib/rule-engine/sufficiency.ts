@@ -11,8 +11,8 @@
 //   O  등기부가 이 매물의 것이 맞는가, 발급일이 최신인가
 //   X  나이 초과·직거래·보증금 한도 초과 같은 요건 충돌 → 이건 evaluator.ts의 몫
 //
-// ownerType·existingLeaseholdRights는 현재 활성 규칙이 소비하지 않으므로 필수에서 뺀다.
-// 규칙이 추가되면 여기 필수 목록에도 함께 넣어야 한다.
+// ownerType·existingLeaseholdRights처럼 OCR이 선택적으로 추출하는 값은 여기서 전체 판정을
+// 중단하지 않고, 해당 HUG 규칙이 자료 부족 또는 선행조치로 판정한다.
 // ============================================================
 import type { CheckResult, DiagnosisCase, Field, RegistryInfo, SourceCode } from '@/types';
 
@@ -20,7 +20,8 @@ import type { CheckResult, DiagnosisCase, Field, RegistryInfo, SourceCode } from
 export const DEFAULT_ISSUED_WITHIN_DAYS = 30;
 
 const ALL_SOURCES: readonly SourceCode[] = [
-  'USER_DECLARED', 'USER_CONFIRMED_DOCUMENT', 'PUBLIC_API', 'INTERNAL_REQUIRED',
+  'USER_DECLARED', 'USER_CONFIRMED_DOCUMENT', 'USER_CONFIRMED_PUBLIC_INFO',
+  'PUBLIC_API', 'INTERNAL_REQUIRED',
 ];
 
 // 항목마다 "어디서 온 값이어야 하는가"가 다르다. 출처 코드가 붙어 있기만 하면 통과시키면
@@ -34,6 +35,7 @@ const CONFIRMED: readonly SourceCode[] = ['USER_CONFIRMED_DOCUMENT'];   // 문�
 export const SOURCE_KO: Record<SourceCode, string> = {
   USER_DECLARED: '자기신고',
   USER_CONFIRMED_DOCUMENT: '고객확인문서',
+  USER_CONFIRMED_PUBLIC_INFO: '고객확인공시정보',
   PUBLIC_API: '공공API',
   INTERNAL_REQUIRED: '기관 내부정보',
 };

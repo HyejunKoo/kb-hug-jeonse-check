@@ -2,9 +2,11 @@
 
 -- 종합 판정 상태 enum (CREATE TYPE은 IF NOT EXISTS를 지원하지 않아 DO 블록으로 감싼다)
 do $$ begin
-  create type overall_status as enum ('pass', 'fail', 'insufficient', 'needs_review');
+  create type overall_status as enum ('pass', 'fail', 'insufficient', 'needs_review', 'needs_action');
 exception when duplicate_object then null;
 end $$;
+
+alter type overall_status add value if not exists 'needs_action';
 
 create table if not exists diagnosis_cases (
   id uuid primary key default gen_random_uuid(),
@@ -44,3 +46,65 @@ drop policy if exists "diagnosis_cases_delete_own" on diagnosis_cases;
 create policy "diagnosis_cases_delete_own" on diagnosis_cases
   for delete to authenticated
   using (user_id = auth.uid());
+
+-- ---------- 크롤링 규칙팩 스냅샷 ----------
+-- 상세 정의와 원격 배포용 SQL은 migrations/20260729000000_create_rule_snapshots.sql을 기준으로 한다.
+create table if not exists rule_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  version text not null,
+  source text not null check (source = 'CRAWLED'),
+  rules jsonb not null check (jsonb_typeof(rules) = 'array'),
+  crawl jsonb not null check (jsonb_typeof(crawl) = 'object'),
+  fetched_at timestamptz not null,
+  parser_version text not null,
+  active boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_rule_snapshots_fetched_at on rule_snapshots (fetched_at desc);
+create unique index if not exists idx_rule_snapshots_one_active on rule_snapshots (active) where active;
+alter table rule_snapshots enable row level security;
+revoke all on table rule_snapshots from anon, authenticated;
+grant select, insert, update on table rule_snapshots to service_role;
+
+create or replace function save_rule_snapshot(
+  p_version text,
+  p_rules jsonb,
+  p_crawl jsonb,
+  p_fetched_at timestamptz,
+  p_parser_version text
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  snapshot_id uuid;
+begin
+  if jsonb_typeof(p_rules) <> 'array' or jsonb_array_length(p_rules) = 0 then
+    raise exception 'rules must be a non-empty JSON array';
+  end if;
+  if coalesce((p_crawl ->> 'success')::boolean, false) is not true then
+    raise exception 'only a successful crawl can be activated';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('public.rule_snapshots.active'));
+  update rule_snapshots set active = false where active;
+
+  insert into rule_snapshots (
+    version, source, rules, crawl, fetched_at, parser_version, active
+  ) values (
+    p_version, 'CRAWLED', p_rules, p_crawl, p_fetched_at, p_parser_version, true
+  )
+  returning id into snapshot_id;
+
+  return snapshot_id;
+end;
+$$;
+
+revoke all on function save_rule_snapshot(text, jsonb, jsonb, timestamptz, text)
+  from public, anon, authenticated;
+grant execute on function save_rule_snapshot(text, jsonb, jsonb, timestamptz, text)
+  to service_role;
+
+notify pgrst, 'reload schema';

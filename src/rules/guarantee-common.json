@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-07-28",
+  "rules": [
+    {
+      "ruleId": "GUARANTEE-COMMON-TYPE",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG", "KB_STAR_HF", "KB_STAR_SGI", "KB_YOUTH_HF"],
+      "label": "보증 대상 주택유형",
+      "checkId": "checkEligiblePropertyType",
+      "params": { "allowed": "APT,MULTI_UNIT,DETACHED,OFFICETEL" },
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "GUARANTEE-COMMON-ILLEGAL",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG", "KB_STAR_HF", "KB_STAR_SGI", "KB_YOUTH_HF"],
+      "label": "위반·무허가 건축물 아님",
+      "checkId": "checkNotIllegalBuilding",
+      "sourceUrl": "https://www.khug.or.kr/hug/web/ig/dl/igdl000001.jsp",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "GUARANTEE-COMMON-RIGHTS",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG", "KB_STAR_HF", "KB_STAR_SGI", "KB_YOUTH_HF"],
+      "label": "압류·가압류·경매 등 권리침해 없음",
+      "checkId": "checkNoRightsViolation",
+      "sourceUrl": "https://www.hf.go.kr/ko/sub02/sub02_05_06.do",
+      "effectiveFrom": "2026-07-28"
+    },
+    {
+      "ruleId": "GUARANTEE-COMMON-OWNER",
+      "layer": "GUARANTEE",
+      "paths": ["KB_STAR_HUG", "KB_STAR_HF", "KB_STAR_SGI", "KB_YOUTH_HF"],
+      "label": "등기부 소유자와 계약 임대인 일치",
+      "checkId": "checkOwnerMatch",
+      "sourceUrl": "https://www.hf.go.kr/ko/sub02/sub02_05_06.do",
+      "effectiveFrom": "2026-07-28"
+    }
+  ]
+}

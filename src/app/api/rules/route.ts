@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { getRulePack } from '@/lib/crawlers/rule-provider';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function GET() {
   const pack = await getRulePack();

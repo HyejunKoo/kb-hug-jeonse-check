@@ -1,6 +1,6 @@
 // src/types/api.ts — API 요청/응답·판정 결과
 import type { DiagnosisCase } from './case';
-import type { Verdict, RuleLayer, PathId, RuleSource } from './rule';
+import type { Verdict, RuleLayer, PathId, RuleSource, GuaranteeProvider } from './rule';
 
 export interface CheckResult {
   ruleId: string;
@@ -9,33 +9,42 @@ export interface CheckResult {
   verdict: Verdict;
   reason: string;
   usedValues: string[];
-  sourceUrl: string;
-  effectiveFrom: string;
+  /** F04 내부 충분성 검사는 외부 출처가 없으므로 비어 있다. */
+  sourceUrl?: string;
+  effectiveFrom?: string;
+  ruleOrigin?: RuleSource;
+  verifiedAt?: string;
+  sourceContentSha256?: string;
+  sourceEvidence?: string[];
   nextAction: string;
 }
 
 export interface PathResult {
   path: PathId;
   pathLabel: string;
-  blockedAt: 'NONE' | 'PRODUCT' | 'GUARANTEE' | 'INSUFFICIENT';
+  guaranteeProvider: GuaranteeProvider;
+  guaranteeLabel: string;
+  blockedAt: 'NONE' | 'PRODUCT' | 'GUARANTEE' | 'INSUFFICIENT' | 'ACTION_REQUIRED';
   results: CheckResult[];
   officialReviewCount: number;
 }
 
 /** diagnosis_cases.status — 종합 판정 상태 (DB enum과 1:1) */
-export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review';
+export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review' | 'needs_action';
 
 // ---- 라우트별 계약 ----
 export type CheckRequest = DiagnosisCase;
 export interface CheckResponse {
-  pathResult: PathResult;
+  pathResults: PathResult[];
   ruleVersion: string;
   ruleSource: RuleSource;
   /** 로그인 사용자의 판정만 저장되며 이때만 채워진다 */
   caseId?: string;
 }
 
-export interface BuildingRequest { address: string; }
+export interface BuildingRequest {
+  address: string;
+}
 
 // ---- /api/ocr (F03 등기부 추출) ----
 /** OCR 추출 신뢰도 상태. LOW_CONFIDENCE 기준값은 0.85 (features/registry/parser.ts OCR_CONFIDENCE_THRESHOLD) */
@@ -45,7 +54,7 @@ export interface OcrFieldDraft<T> {
   value?: T;
   confidence: number; // MISSING이면 0
   status: OcrFieldStatus;
-  evidence?: string;  // 판단 근거가 된 원문 일부 (짧은 스니펫만, 문서 전체 미포함)
+  evidence?: string; // 판단 근거가 된 원문 일부 (짧은 스니펫만, 문서 전체 미포함)
 }
 
 /**
@@ -58,14 +67,16 @@ export interface RegistryOcrDraft {
   ownerType?: OcrFieldDraft<'INDIVIDUAL' | 'CORPORATION'>;
   seniorLienTotal?: OcrFieldDraft<number>;
   hasRightsViolation?: OcrFieldDraft<boolean>;
-  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 (참고용) */
+  /** 을구에 기존 전세권·임차권 등 등록된 권리가 남아있는지 */
   existingLeaseholdRights?: OcrFieldDraft<boolean>;
   /** 표제부 소재지 표기 — 고객이 선택한 매물 주소와 대조하는 데 쓴다 (F04) */
   documentAddress?: OcrFieldDraft<string>;
   issuedDate?: string;
 }
 
-export interface OcrResponse { draft: RegistryOcrDraft; }
+export interface OcrResponse {
+  draft: RegistryOcrDraft;
+}
 
 export type OcrErrorCode =
   | 'OCR_NOT_CONFIGURED'
@@ -74,10 +85,18 @@ export type OcrErrorCode =
   | 'OCR_PROVIDER_FAILED'
   | 'RATE_LIMITED';
 
-export interface OcrErrorResponse { error: string; code: OcrErrorCode; }
+export interface OcrErrorResponse {
+  error: string;
+  code: OcrErrorCode;
+}
 
-export interface ReportRequest { pathResult: PathResult; }
-export interface ReportResponse { report: string; llm: boolean; }
+export interface ReportRequest {
+  pathResults: PathResult[];
+}
+export interface ReportResponse {
+  report: string;
+  llm: boolean;
+}
 
 // ---- 저장된 진단 이력 (로그인 사용자 전용) ----
 export interface CaseSummary {
@@ -88,12 +107,14 @@ export interface CaseSummary {
   status: OverallStatus | null;
   ruleVersion: string;
 }
-export interface CaseListResponse { cases: CaseSummary[]; }
+export interface CaseListResponse {
+  cases: CaseSummary[];
+}
 
 export interface CaseDetailResponse {
   id: string;
   createdAt: string;
-  pathResult: PathResult;
+  pathResults: PathResult[];
   status: OverallStatus | null;
   ruleVersion: string;
 }

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type {
-  ApplicantInput, PlannedContractInput, Property, RegistryInfo, PathResult, Verdict,
+  ApplicantInput, PlannedContractInput, Property, RegistryInfo, PathResult,
 } from '@/types';
 import {
   DEFAULT_APPLICANT, DEFAULT_CONTRACT, EMPTY_PROPERTY,
@@ -16,11 +16,12 @@ import { toDiagnosisCase } from '@/features/intake/mapper';
 import { searchAddress, fetchBuildingInfo } from '@/features/building/client';
 import type { JusoItem } from '@/features/building/mapper';
 import { Row, Toggle, Nav } from '@/features/intake/components/fields';
-import { RegistryReview } from '@/features/registry/components/RegistryReview';
-import { ResultCard } from '@/features/result/components/ResultCard';
 import {
-  VERDICT_KO, VERDICT_BADGE, VERDICT_DESC, LAYER_ORDER, LAYER_KO,
-} from '@/features/result/formatter';
+  GuaranteeRatioInputs,
+  type GuaranteeRatioValues,
+} from '@/features/intake/components/GuaranteeRatioInputs';
+import { RegistryReview } from '@/features/registry/components/RegistryReview';
+import { PathComparison } from '@/features/result/components/PathComparison';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
 const PENDING_KEY = 'kb-pending-diagnosis';
@@ -30,6 +31,7 @@ interface PendingCase {
   contract: PlannedContractInput;
   property: Property;
   registry?: RegistryInfo;
+  guaranteeValues: GuaranteeRatioValues;
 }
 
 async function hasSession(): Promise<boolean> {
@@ -68,7 +70,8 @@ export default function DiagnosisPage() {
   const [contract, setContract] = useState<PlannedContractInput>(DEFAULT_CONTRACT);
   const [property, setProperty] = useState<Property>(EMPTY_PROPERTY);
   const [registry, setRegistry] = useState<RegistryInfo | undefined>();
-  const [result, setResult] = useState<PathResult | null>(null);
+  const [guaranteeValues, setGuaranteeValues] = useState<GuaranteeRatioValues>({});
+  const [results, setResults] = useState<PathResult[]>([]);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
@@ -99,48 +102,109 @@ export default function DiagnosisPage() {
 
   async function onSearch() {
     if (!query.trim()) return;
-    setLoading(true); setSearched(true); setSelected(null); setProperty(EMPTY_PROPERTY); setRegistry(undefined);
+    setLoading(true);
+    setSearched(true);
+    setSelected(null);
+    setProperty(EMPTY_PROPERTY);
+    setRegistry(undefined);
+    setGuaranteeValues({});
     try {
       const { candidates: list, notes: n } = await searchAddress(query);
-      setCandidates(list); setNotes(n);
-    } finally { setLoading(false); }
+      setCandidates(list);
+      setNotes(n);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onSelect(j: JusoItem) {
-    setSelected(j); setLoading(true); setRegistry(undefined);
+    setSelected(j);
+    setLoading(true);
+    setRegistry(undefined);
+    setGuaranteeValues({});
     try {
       const r = await fetchBuildingInfo(j);
       if (r.property) setProperty(r.property);
       setNotes(r.notes);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function runCheck(a: ApplicantInput, c: PlannedContractInput, p: Property, r?: RegistryInfo) {
+  async function runCheck(
+    a: ApplicantInput,
+    c: PlannedContractInput,
+    p: Property,
+    r: RegistryInfo | undefined,
+    ratios: GuaranteeRatioValues,
+  ) {
     setLoading(true);
     try {
+      const propertyForCheck: Property =
+        ratios.housingPrice === undefined
+          ? p
+          : {
+              ...p,
+              housingPrice: {
+                value: ratios.housingPrice,
+                source: 'USER_CONFIRMED_PUBLIC_INFO',
+              },
+            };
+      const registryForCheck: RegistryInfo | undefined =
+        ratios.seniorLeaseDepositTotal === undefined
+          ? r
+          : {
+              ...r,
+              seniorLeaseDepositTotal: {
+                value: ratios.seniorLeaseDepositTotal,
+                source: 'USER_CONFIRMED_DOCUMENT',
+              },
+            };
       const res = await fetch('/api/check', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(toDiagnosisCase(a, c, p, r)),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(toDiagnosisCase(a, c, propertyForCheck, registryForCheck)),
       });
       const data = await res.json();
-      setResult(data.pathResult);
+      if (!res.ok || !Array.isArray(data.pathResults)) {
+        setErrors([data.error ?? '판정 결과를 불러오지 못했습니다.']);
+        return;
+      }
+      setResults(data.pathResults);
       setCaseId(data.caseId ?? null);
       setStep(3);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onRunCheck() {
     if (!property.address.value) { setErrors(['매물 주소를 검색해 선택해 주세요.']); return; }
+    if (
+      guaranteeValues.housingPrice !== undefined &&
+      (!Number.isFinite(guaranteeValues.housingPrice) || guaranteeValues.housingPrice <= 0)
+    ) {
+      setErrors(['공식 주택가격은 0보다 큰 원 단위 금액으로 입력해 주세요.']);
+      return;
+    }
+    if (
+      guaranteeValues.seniorLeaseDepositTotal !== undefined &&
+      (!Number.isFinite(guaranteeValues.seniorLeaseDepositTotal) ||
+        guaranteeValues.seniorLeaseDepositTotal < 0)
+    ) {
+      setErrors(['선순위 임차보증금 합계는 0 이상의 원 단위 금액으로 입력해 주세요.']);
+      return;
+    }
     setErrors([]);
 
     if (!(await hasSession())) {
-      const pending: PendingCase = { applicant, contract, property, registry };
+      const pending: PendingCase = { applicant, contract, property, registry, guaranteeValues };
       sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
       setShowLoginPrompt(true);
       return;
     }
 
-    await runCheck(applicant, contract, property, registry);
+    await runCheck(applicant, contract, property, registry, guaranteeValues);
   }
 
   // 로그인 유도 팝업 이후 로그인/회원가입을 마치고 돌아오면, 보관해둔 입력값으로 바로 판정을 이어간다
@@ -156,21 +220,31 @@ export default function DiagnosisPage() {
       setContract(pending.contract);
       setProperty(pending.property);
       setRegistry(pending.registry);
-      await runCheck(pending.applicant, pending.contract, pending.property, pending.registry);
+      setGuaranteeValues(pending.guaranteeValues ?? {});
+      await runCheck(
+        pending.applicant,
+        pending.contract,
+        pending.property,
+        pending.registry,
+        pending.guaranteeValues ?? {},
+      );
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onMakeReport() {
-    if (!result) return;
+    if (results.length === 0) return;
     setLoading(true);
     try {
       const res = await fetch('/api/report', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pathResult: result }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pathResults: results }),
       });
       setReport((await res.json()).report ?? '');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onCopyReport() {
@@ -178,7 +252,9 @@ export default function DiagnosisPage() {
       await navigator.clipboard.writeText(report);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch { /* 클립보드 권한 없음 — 무시 */ }
+    } catch {
+      /* 클립보드 권한 없음 — 무시 */
+    }
   }
 
   function next(validate: () => string[], to: number) {
@@ -186,22 +262,6 @@ export default function DiagnosisPage() {
     setErrors(errs);
     if (errs.length === 0) setStep(to);
   }
-
-  const verdictCounts = result
-    ? result.results.reduce<Partial<Record<Verdict, number>>>((acc, r) => {
-        acc[r.verdict] = (acc[r.verdict] ?? 0) + 1;
-        return acc;
-      }, {})
-    : {};
-
-  const blockedTone =
-    result?.blockedAt === 'NONE'
-      ? { bar: 'bg-emerald-500', text: '막힌 단계 없음', cls: 'text-emerald-700' }
-      : result?.blockedAt === 'INSUFFICIENT'
-        ? { bar: 'bg-amber-400', text: '자료 부족으로 판정 보류', cls: 'text-amber-700' }
-        : result?.blockedAt === 'PRODUCT'
-          ? { bar: 'bg-red-500', text: '1층 · KB 상품요건에서 막힘', cls: 'text-red-700' }
-          : { bar: 'bg-red-500', text: '2층 · HUG 보증요건에서 막힘', cls: 'text-red-700' };
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
@@ -231,7 +291,7 @@ export default function DiagnosisPage() {
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-2xl font-bold tracking-tight">KB 전세 코파일럿</h1>
           <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-            MVP · HUG 경로
+            F05·F06 · KB HUG MVP
           </span>
         </div>
         <p className="mt-2 text-sm text-slate-500">
@@ -251,14 +311,18 @@ export default function DiagnosisPage() {
                   <span
                     aria-current={now ? 'step' : undefined}
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[12px] font-bold transition ${
-                      now ? 'border-kb-500 bg-kb-500 text-kb-900'
-                        : done ? 'border-slate-300 bg-slate-800 text-white'
+                      now
+                        ? 'border-kb-500 bg-kb-500 text-kb-900'
+                        : done
+                          ? 'border-slate-300 bg-slate-800 text-white'
                           : 'border-slate-200 bg-white text-slate-400'
                     }`}
                   >
                     {done ? '✓' : i + 1}
                   </span>
-                  <span className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'}`}>
+                  <span
+                    className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'}`}
+                  >
                     {s.t}
                   </span>
                 </div>
@@ -275,7 +339,9 @@ export default function DiagnosisPage() {
         <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-sm font-bold text-red-800">입력을 확인해 주세요</p>
           <ul className="mt-1.5 space-y-0.5 text-sm text-red-700">
-            {errors.map((e) => <li key={e}>· {e}</li>)}
+            {errors.map((e) => (
+              <li key={e}>· {e}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -291,8 +357,13 @@ export default function DiagnosisPage() {
               </div>
               <div className="card-body space-y-5">
                 <Row label="연령 (만)" required>
-                  <input type="number" className="inp" value={applicant.age} inputMode="numeric"
-                    onChange={(e) => set('age', Number(e.target.value))} />
+                  <input
+                    type="number"
+                    className="inp"
+                    value={applicant.age}
+                    inputMode="numeric"
+                    onChange={(e) => set('age', Number(e.target.value))}
+                  />
                 </Row>
 
                 <Row
@@ -300,8 +371,13 @@ export default function DiagnosisPage() {
                   required
                   hint="주민등록등본 맨 위에 나오는 사람이 세대주입니다. 혼자 전입신고를 했다면 보통 세대주, 부모님 주소에 함께 등록돼 있다면 세대원이에요. 정부24에서 등본을 떼면 확인할 수 있습니다."
                 >
-                  <select className="inp" value={applicant.householdHead}
-                    onChange={(e) => set('householdHead', e.target.value as ApplicantInput['householdHead'])}>
+                  <select
+                    className="inp"
+                    value={applicant.householdHead}
+                    onChange={(e) =>
+                      set('householdHead', e.target.value as ApplicantInput['householdHead'])
+                    }
+                  >
                     <option value="YES">세대주</option>
                     <option value="NO">세대원</option>
                     <option value="PLANNED">세대주 예정 (곧 전입·세대분리)</option>
@@ -309,17 +385,29 @@ export default function DiagnosisPage() {
                 </Row>
 
                 <Row label="주택 보유" required>
-                  <select className="inp" value={applicant.homeCount}
-                    onChange={(e) => set('homeCount', Number(e.target.value) as 0 | 1 | 2)}>
+                  <select
+                    className="inp"
+                    value={applicant.homeCount}
+                    onChange={(e) => set('homeCount', Number(e.target.value) as 0 | 1 | 2)}
+                  >
                     <option value={0}>0채 (무주택)</option>
                     <option value={1}>1채</option>
                     <option value={2}>2채 이상</option>
                   </select>
                 </Row>
 
-                <Row label="혼인 상태" required hint="소득·주택 보유를 배우자와 합산할지 결정하는 데 씁니다.">
-                  <select className="inp" value={applicant.maritalStatus}
-                    onChange={(e) => set('maritalStatus', e.target.value as ApplicantInput['maritalStatus'])}>
+                <Row
+                  label="혼인 상태"
+                  required
+                  hint="소득·주택 보유를 배우자와 합산할지 결정하는 데 씁니다."
+                >
+                  <select
+                    className="inp"
+                    value={applicant.maritalStatus}
+                    onChange={(e) =>
+                      set('maritalStatus', e.target.value as ApplicantInput['maritalStatus'])
+                    }
+                  >
                     <option value="SINGLE">미혼</option>
                     <option value="MARRIED">기혼</option>
                     <option value="PLANNED">결혼 예정</option>
@@ -330,11 +418,16 @@ export default function DiagnosisPage() {
                   label={needsSpouseIncome(applicant) ? '부부합산 연소득' : '본인 연소득'}
                   required
                   hint={`한도를 계산하지 않고 상한 요건 해당 여부만 확인합니다. 모르면 '모름'을 고르세요.${
-                    needsSpouseIncome(applicant) ? ' 배우자 소득을 합산해 신고하세요.' : ' 미혼은 본인 소득만 신고하면 됩니다.'
+                    needsSpouseIncome(applicant)
+                      ? ' 배우자 소득을 합산해 신고하세요.'
+                      : ' 미혼은 본인 소득만 신고하면 됩니다.'
                   }`}
                 >
-                  <select className="inp" value={applicant.incomeBand}
-                    onChange={(e) => set('incomeBand', e.target.value as ApplicantInput['incomeBand'])}>
+                  <select
+                    className="inp"
+                    value={applicant.incomeBand}
+                    onChange={(e) => set('incomeBand', e.target.value as ApplicantInput['incomeBand'])}
+                  >
                     <option value="UNDER_50M">5천만원 이하</option>
                     <option value="B50_60M">5천~6천만원</option>
                     <option value="B60_70M">6천~7천만원</option>
@@ -344,8 +437,11 @@ export default function DiagnosisPage() {
                 </Row>
 
                 <Row label="소득 유형" required>
-                  <select className="inp" value={applicant.incomeType}
-                    onChange={(e) => set('incomeType', e.target.value as ApplicantInput['incomeType'])}>
+                  <select
+                    className="inp"
+                    value={applicant.incomeType}
+                    onChange={(e) => set('incomeType', e.target.value as ApplicantInput['incomeType'])}
+                  >
                     <option value="EMPLOYED">근로소득</option>
                     <option value="SELF_EMPLOYED">사업소득</option>
                     <option value="NO_INCOME">무소득</option>
@@ -353,8 +449,13 @@ export default function DiagnosisPage() {
                 </Row>
 
                 <Row label="기존 전세자금대출 보유" required>
-                  <select className="inp" value={applicant.existingJeonseLoan}
-                    onChange={(e) => set('existingJeonseLoan', e.target.value as ApplicantInput['existingJeonseLoan'])}>
+                  <select
+                    className="inp"
+                    value={applicant.existingJeonseLoan}
+                    onChange={(e) =>
+                      set('existingJeonseLoan', e.target.value as ApplicantInput['existingJeonseLoan'])
+                    }
+                  >
                     <option value="NONE">없음</option>
                     <option value="HAS_ONE">1건</option>
                     <option value="HAS_MULTIPLE">2건 이상</option>
@@ -374,27 +475,56 @@ export default function DiagnosisPage() {
                 <p className="mt-1 text-xs text-slate-500">{STEPS[1].d}</p>
               </div>
               <div className="card-body space-y-5">
-                <Row label="예정 보증금" required
-                  hint={contract.deposit > 0 ? `${won(contract.deposit)} · 원 단위로 입력하세요` : '원 단위로 입력하세요 (예: 200000000)'}>
-                  <input type="number" className="inp" value={contract.deposit} inputMode="numeric"
-                    onChange={(e) => setC('deposit', Number(e.target.value))} />
+                <Row
+                  label="예정 보증금"
+                  required
+                  hint={
+                    contract.deposit > 0
+                      ? `${won(contract.deposit)} · 원 단위로 입력하세요`
+                      : '원 단위로 입력하세요 (예: 200000000)'
+                  }
+                >
+                  <input
+                    type="number"
+                    className="inp"
+                    value={contract.deposit}
+                    inputMode="numeric"
+                    onChange={(e) => setC('deposit', Number(e.target.value))}
+                  />
                 </Row>
 
                 <Row label="계약기간 (개월)" required>
-                  <input type="number" className="inp" value={contract.termMonths} inputMode="numeric"
-                    onChange={(e) => setC('termMonths', Number(e.target.value))} />
+                  <input
+                    type="number"
+                    className="inp"
+                    value={contract.termMonths}
+                    inputMode="numeric"
+                    onChange={(e) => setC('termMonths', Number(e.target.value))}
+                  />
                 </Row>
 
                 <Row label="입주 예정일" required>
-                  <input type="date" className="inp" value={contract.moveInDate}
-                    onChange={(e) => setC('moveInDate', e.target.value)} />
+                  <input
+                    type="date"
+                    className="inp"
+                    value={contract.moveInDate}
+                    onChange={(e) => setC('moveInDate', e.target.value)}
+                  />
                 </Row>
 
                 <Row label="공인중개사 중개" required>
-                  <Toggle value={contract.brokered} onChange={(v) => setC('brokered', v)} yes="중개" no="직거래" />
+                  <Toggle
+                    value={contract.brokered}
+                    onChange={(v) => setC('brokered', v)}
+                    yes="중개"
+                    no="직거래"
+                  />
                 </Row>
 
-                <Nav onPrev={() => setStep(0)} onNext={() => next(() => validateContract(contract), 2)} />
+                <Nav
+                  onPrev={() => setStep(0)}
+                  onNext={() => next(() => validateContract(contract), 2)}
+                />
               </div>
             </section>
           )}
@@ -407,13 +537,26 @@ export default function DiagnosisPage() {
                 <p className="mt-1 text-xs text-slate-500">{STEPS[2].d}</p>
               </div>
               <div className="card-body space-y-5">
-                <Row label="계약하려는 집 주소" required
-                  hint="지금 사는 집이 아니라 계약하려는 매물 주소예요. 도로명 주소로 검색하세요.">
+                <Row
+                  label="계약하려는 집 주소"
+                  required
+                  hint="지금 사는 집이 아니라 계약하려는 매물 주소예요. 도로명 주소로 검색하세요."
+                >
                   <div className="flex gap-2">
-                    <input className="inp flex-1" placeholder="예: 마포구 월드컵로 240" value={query}
+                    <input
+                      className="inp flex-1"
+                      placeholder="예: 마포구 월드컵로 240"
+                      value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') onSearch(); }} />
-                    <button className="btn-sub whitespace-nowrap" onClick={onSearch} disabled={loading}>
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') onSearch();
+                      }}
+                    />
+                    <button
+                      className="btn-sub whitespace-nowrap"
+                      onClick={onSearch}
+                      disabled={loading}
+                    >
                       {loading ? '검색 중…' : '주소 검색'}
                     </button>
                   </div>
@@ -428,13 +571,21 @@ export default function DiagnosisPage() {
                       {candidates.map((j) => {
                         const on = selected?.bdMgtSn === j.bdMgtSn;
                         return (
-                          <button key={j.bdMgtSn} onClick={() => onSelect(j)}
+                          <button
+                            key={j.bdMgtSn}
+                            onClick={() => onSelect(j)}
                             className={`block w-full rounded-lg border p-3 text-left transition ${
-                              on ? 'border-kb-500 bg-kb-50 ring-2 ring-kb-500/15'
+                              on
+                                ? 'border-kb-500 bg-kb-50 ring-2 ring-kb-500/15'
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                            }`}>
-                            <span className="block text-sm font-semibold text-slate-900">{j.roadAddr}</span>
-                            <span className="mt-0.5 block text-xs text-slate-500">{j.jibunAddr}</span>
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold text-slate-900">
+                              {j.roadAddr}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-slate-500">
+                              {j.jibunAddr}
+                            </span>
                           </button>
                         );
                       })}
@@ -450,7 +601,9 @@ export default function DiagnosisPage() {
 
                 {property.address.value && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">선택한 매물</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      선택한 매물
+                    </p>
                     <p className="mt-1 text-sm font-bold text-slate-900">{property.address.value}</p>
                     {property.jibunAddress && (
                       <p className="mt-0.5 text-xs text-slate-500">{property.jibunAddress.value}</p>
@@ -465,13 +618,17 @@ export default function DiagnosisPage() {
                       {property.propertyTypeLabel && (
                         <div>
                           <dt className="text-slate-400">유형</dt>
-                          <dd className="mt-0.5 font-semibold text-slate-700">{property.propertyTypeLabel}</dd>
+                          <dd className="mt-0.5 font-semibold text-slate-700">
+                            {property.propertyTypeLabel}
+                          </dd>
                         </div>
                       )}
                       {property.buildingUse && (
                         <div>
                           <dt className="text-slate-400">주용도</dt>
-                          <dd className="mt-0.5 font-semibold text-slate-700">{property.buildingUse.value}</dd>
+                          <dd className="mt-0.5 font-semibold text-slate-700">
+                            {property.buildingUse.value}
+                          </dd>
                         </div>
                       )}
                       {property.exclusiveArea && (
@@ -485,7 +642,8 @@ export default function DiagnosisPage() {
                     </dl>
                     {property.fetchedAt && (
                       <p className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-400">
-                        건축물대장 조회 {new Date(property.fetchedAt).toLocaleString('ko-KR')} · 월간 갱신 데이터라 최신 발급본과 다를 수 있습니다.
+                        건축물대장 조회 {new Date(property.fetchedAt).toLocaleString('ko-KR')} ·
+                        월간 갱신 데이터라 최신 발급본과 다를 수 있습니다.
                       </p>
                     )}
                   </div>
@@ -526,90 +684,53 @@ export default function DiagnosisPage() {
                   onConfirmed={setRegistry}
                 />
 
-                <Nav onPrev={() => setStep(1)} onNext={onRunCheck}
-                  nextLabel={loading ? '판정 중…' : '사전점검 실행'} disabled={loading} />
+                {property.address.value && (
+                  <GuaranteeRatioInputs
+                    propertyType={property.propertyType?.value}
+                    value={guaranteeValues}
+                    onChange={setGuaranteeValues}
+                  />
+                )}
+
+                <Nav
+                  onPrev={() => setStep(1)}
+                  onNext={onRunCheck}
+                  nextLabel={loading ? '판정 중…' : '사전점검 실행'}
+                  disabled={loading}
+                />
               </div>
             </section>
           )}
 
           {/* ---------- 4. 결과 ---------- */}
-          {step === 3 && result && (
+          {step === 3 && results.length > 0 && (
             <section className="space-y-6">
-              {/* 요약 배너 */}
-              <div className="card relative overflow-hidden">
-                <span className={`absolute inset-x-0 top-0 h-1 ${blockedTone.bar}`} aria-hidden />
-                <div className="card-body">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">판정 요약</p>
-                  <h2 className="mt-1.5 text-xl font-bold tracking-tight">{result.pathLabel}</h2>
-                  <p className={`mt-2 text-sm font-bold ${blockedTone.cls}`}>{blockedTone.text}</p>
+              <PathComparison results={results} />
 
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {(Object.keys(verdictCounts) as Verdict[]).map((v) => (
-                      <span key={v} className={`badge ${VERDICT_BADGE[v]} px-3 py-1`}>
-                        {VERDICT_KO[v]} {verdictCounts[v]}
-                      </span>
-                    ))}
-                  </div>
-
-                  <p className="mt-5 rounded-lg bg-slate-50 px-3.5 py-2.5 text-xs leading-relaxed text-slate-500">
-                    공식 심사 필요 {result.officialReviewCount}건 · &lsquo;확인된 충돌 없음&rsquo;은 승인·보증 가능을 의미하지 않습니다.
-                  </p>
-
-                  {caseId ? (
-                    <p className="mt-3 text-xs font-semibold text-emerald-700">
-                      ✓ 저장됨 · <Link href="/diagnosis/result" className="underline underline-offset-2">내 이력에서 보기</Link>
-                    </p>
-                  ) : (
-                    <p className="mt-3 text-xs text-amber-700">
-                      결과 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {result.blockedAt === 'INSUFFICIENT' && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-800">
-                  <p className="text-sm font-bold">아래 자료를 보완하면 층별 판정을 볼 수 있습니다</p>
-                  <p className="mt-1.5">
-                    진단에 필요한 값이 부족하거나 서로 맞지 않아 KB 상품요건·HUG 보증요건 대조는 실행하지 않았습니다.
-                    빈 값 위에서 만든 판정을 보여드리지 않기 위한 처리입니다.
-                  </p>
-                </div>
+              {caseId ? (
+                <p className="text-xs font-semibold text-emerald-700">
+                  ✓ 저장됨 ·{' '}
+                  <Link href="/diagnosis/result" className="underline underline-offset-2">
+                    내 이력에서 보기
+                  </Link>
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  결과 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.
+                </p>
               )}
-
-              {/* 층별 판정 — 진단자료 충분성 → KB 상품요건 → HUG 보증요건 순 */}
-              {LAYER_ORDER.map((layer) => {
-                const rows = result.results.filter((r) => r.layer === layer);
-                if (rows.length === 0) return null;
-                return (
-                  <div key={layer}>
-                    <div className="mb-3 flex items-baseline gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">{LAYER_KO[layer]}</h3>
-                      <span className="text-xs text-slate-400">{rows.length}개 항목</span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {rows.map((r) => <ResultCard key={r.ruleId} r={r} />)}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* 판정 언어 범례 */}
-              <details className="card card-body">
-                <summary className="cursor-pointer text-sm font-bold">판정 언어 설명</summary>
-                <dl className="mt-4 space-y-2.5">
-                  {(Object.keys(VERDICT_KO) as Verdict[]).map((v) => (
-                    <div key={v} className="flex flex-wrap items-baseline gap-2">
-                      <dt className={`badge ${VERDICT_BADGE[v]}`}>{VERDICT_KO[v]}</dt>
-                      <dd className="flex-1 text-xs leading-relaxed text-slate-500">{VERDICT_DESC[v]}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
 
               {/* 액션 */}
               <div className="flex flex-wrap gap-2">
-                <button className="btn-sub" onClick={() => { setStep(0); setResult(null); setCaseId(null); setReport(''); }}>
+                <button
+                  className="btn-sub"
+                  onClick={() => {
+                    setStep(0);
+                    setResults([]);
+                    setCaseId(null);
+                    setReport('');
+                  }}
+                >
                   처음부터
                 </button>
                 <button className="btn-main" onClick={onMakeReport} disabled={loading}>
@@ -639,11 +760,17 @@ export default function DiagnosisPage() {
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
               <div className="card card-body">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">입력 요약</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  입력 요약
+                </p>
                 <dl className="mt-3 space-y-2.5 text-xs">
                   <SummaryRow k="연령" v={`만 ${applicant.age}세`} on={step > 0} />
                   <SummaryRow k="세대주" v={HEAD_KO[applicant.householdHead]} on={step > 0} />
-                  <SummaryRow k="주택 보유" v={`${applicant.homeCount === 2 ? '2채 이상' : `${applicant.homeCount}채`}`} on={step > 0} />
+                  <SummaryRow
+                    k="주택 보유"
+                    v={`${applicant.homeCount === 2 ? '2채 이상' : `${applicant.homeCount}채`}`}
+                    on={step > 0}
+                  />
                   <SummaryRow k="연소득" v={INCOME_KO[applicant.incomeBand]} on={step > 0} />
                   <SummaryRow k="보증금" v={won(contract.deposit)} on={step > 1} />
                   <SummaryRow k="계약기간" v={`${contract.termMonths}개월`} on={step > 1} />
@@ -653,7 +780,8 @@ export default function DiagnosisPage() {
               </div>
 
               <p className="px-1 text-[11px] leading-relaxed text-slate-400">
-                입력값은 판정에만 사용되며 실제 개인정보를 넣지 마세요. 모든 판정에는 근거와 출처·기준일이 함께 표시됩니다.
+                입력값은 판정에만 사용되며 실제 개인정보를 넣지 마세요. 모든 판정에는 근거와
+                출처·기준일이 함께 표시됩니다.
               </p>
             </div>
           </aside>
@@ -667,7 +795,11 @@ function SummaryRow({ k, v, on }: { k: string; v: string; on: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-slate-400">{k}</dt>
-      <dd className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}>{v}</dd>
+      <dd
+        className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}
+      >
+        {v}
+      </dd>
     </div>
   );
 }

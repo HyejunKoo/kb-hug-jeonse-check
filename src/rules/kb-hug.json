@@ -1,171 +1,83 @@
 {
-  "version": "0.1.0",
-  "updatedAt": "2026-07-24",
-  "_comment": "3번 담당(도메인)이 KB 상품공시·HUG 보증요건 원문 확인 후 params·sourceUrl·effectiveFrom을 검수/수정할 것. 수치는 초기 골격용 예시값.",
+  "version": "hug-mvp-1.0.0",
+  "updatedAt": "2026-07-29",
   "rules": [
     {
       "ruleId": "KB-HUG-AGE",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "신청인 연령 요건",
+      "paths": ["KB_STAR_HUG"],
+      "label": "민법상 성년(만 19세 이상)",
       "checkId": "checkAge",
-      "params": {
-        "min": 19,
-        "max": 34
-      },
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "params": { "min": 19 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
       "ruleId": "KB-HUG-HOUSEHOLDER",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "세대주 요건",
+      "paths": ["KB_STAR_HUG"],
+      "label": "주민등록등본상 세대주",
       "checkId": "checkHouseholder",
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
       "ruleId": "KB-HUG-HOMECOUNT",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "주택보유 요건 (1주택 이내)",
+      "paths": ["KB_STAR_HUG"],
+      "label": "부부합산 주택보유 1주택 이내",
       "checkId": "checkHomeCount",
-      "params": {
-        "maxHomes": 1
-      },
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "KB-HUG-INCOME",
-      "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "소득 상한 요건",
-      "checkId": "checkIncomeCap",
-      "params": {
-        "capBand": "UNDER_50M"
-      },
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "params": { "maxHomes": 1 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
       "ruleId": "KB-HUG-BROKERED",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "공인중개사 중개 계약 요건",
+      "paths": ["KB_STAR_HUG"],
+      "label": "공인중개사 중개 계약",
       "checkId": "checkBrokered",
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
-      "ruleId": "KB-HUG-EXISTING-LOAN",
+      "ruleId": "KB-HUG-TERM",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "기존 전세자금대출 중복 제한",
-      "checkId": "checkExistingLoan",
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "paths": ["KB_STAR_HUG"],
+      "label": "임대차 계약기간 1년 이상",
+      "checkId": "checkTermMin",
+      "params": { "minMonths": 12 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
+    },
+    {
+      "ruleId": "KB-HUG-DEPOSIT",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HUG"],
+      "label": "임차보증금 수도권 7억·그 외 5억 이하",
+      "checkId": "checkDepositCap",
+      "params": { "capitalCap": 700000000, "nonCapitalCap": 500000000 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
       "ruleId": "KB-HUG-DOWNPAYMENT",
       "layer": "PRODUCT",
-      "path": "KB_STAR_HUG",
-      "label": "계약금 5% 이상 지급 (계약 후 요건)",
+      "paths": ["KB_STAR_HUG"],
+      "label": "계약금 5% 이상 지급",
       "checkId": "alwaysPostContract",
-      "sourceUrl": "https://obank.kbstar.com/quics?page=C103507",
-      "effectiveFrom": "2026-07-01"
+      "params": { "downPaymentPct": 5 },
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     },
     {
-      "ruleId": "HUG-TERM",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "계약기간 1년 이상",
-      "checkId": "checkTermMin",
-      "params": {
-        "minMonths": 12
-      },
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-DEPOSIT-CAP",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "보증금 한도 (수도권 7억 / 비수도권 5억)",
-      "checkId": "checkDepositCap",
-      "params": {
-        "capitalCap": 700000000,
-        "nonCapitalCap": 500000000
-      },
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-ILLEGAL-BUILDING",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "위반건축물 아님",
-      "checkId": "checkNotIllegalBuilding",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-RIGHTS",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "권리침해(압류·가압류·경매 등) 없음",
-      "checkId": "checkNoRightsViolation",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-OWNER-MATCH",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "등기부 소유자·계약 임대인 일치",
-      "checkId": "checkOwnerMatch",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-SENIOR-LIEN",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "선순위채권 비율 요건",
-      "checkId": "checkSeniorLienRatio",
-      "params": {
-        "maxRatioOfPrice": 0.6
-      },
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-HOUSING-TYPE",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "주택 유형별 담보인정 기준 (다가구 선순위 임차보증금)",
-      "checkId": "checkMultiFamilyRisk",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-HOUSE-PRICE",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "공식 시세 기반 주택가격 산정",
+      "ruleId": "KB-HUG-GUARANTEE-ISSUANCE",
+      "layer": "PRODUCT",
+      "paths": ["KB_STAR_HUG"],
+      "label": "HUG 반환보증·대출특약보증 가입 가능",
       "checkId": "alwaysOfficialReview",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
-    },
-    {
-      "ruleId": "HUG-ELIGIBLE-TYPE",
-      "layer": "GUARANTEE",
-      "path": "KB_STAR_HUG",
-      "label": "대상 주택유형 (공통)",
-      "checkId": "checkEligiblePropertyType",
-      "sourceUrl": "https://www.khug.or.kr",
-      "effectiveFrom": "2026-07-01"
+      "sourceUrl": "https://obank.kbstar.com/quics?cc=b104363%3Ab104516&page=C103507&prcode=LN20001364",
+      "effectiveFrom": "UNCONFIRMED"
     }
   ]
 }

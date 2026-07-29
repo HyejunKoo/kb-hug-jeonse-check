@@ -3,16 +3,26 @@
 import { validateDiagnosticSufficiency } from '@/lib/rule-engine/sufficiency';
 import { runRulePack } from '@/lib/rule-engine';
 import kbHugJson from '@/rules/kb-hug.json';
+import hugGuaranteeJson from '@/rules/hug-guarantee.json';
 import type { DiagnosisCase, RegistryInfo, RulePack } from '@/types';
 
 const TODAY = '2026-08-01';
-const PACK = kbHugJson as RulePack;
+const PACK: RulePack = {
+  version: 'manual-f04-hug',
+  updatedAt: TODAY,
+  rules: [
+    ...(kbHugJson as RulePack).rules,
+    ...(hugGuaranteeJson as RulePack).rules,
+  ],
+};
 
 const registry = (over: Partial<RegistryInfo> = {}): RegistryInfo => ({
   documentAddress: { value: '서울특별시 마포구 성산동 515-1', source: 'USER_CONFIRMED_DOCUMENT' },
   addressMatch: { value: 'MATCHED', source: 'USER_CONFIRMED_DOCUMENT' },
   ownerMatch: { value: 'MATCHED', source: 'USER_CONFIRMED_DOCUMENT' },
+  ownerType: { value: 'INDIVIDUAL', source: 'USER_CONFIRMED_DOCUMENT' },
   hasRightsViolation: { value: false, source: 'USER_CONFIRMED_DOCUMENT' },
+  existingLeaseholdRights: { value: false, source: 'USER_CONFIRMED_DOCUMENT' },
   seniorLienTotal: { value: 120000000, source: 'USER_CONFIRMED_DOCUMENT' },
   issuedDate: { value: '2026-07-20', source: 'USER_CONFIRMED_DOCUMENT' },
   ...over,
@@ -189,11 +199,11 @@ const CASES: Case[] = [
       d.property.isIllegalBuilding = { value: true, source: 'USER_CONFIRMED_DOCUMENT' };
     }),
     expectIssues: [],
-    expectRule: { ruleId: 'HUG-ILLEGAL-BUILDING', verdict: 'PUBLIC_REQUIREMENT_UNMET' },
+    expectRule: { ruleId: 'HUG-NOT-ILLEGAL-BUILDING', verdict: 'PUBLIC_REQUIREMENT_UNMET' },
   },
   {
-    name: '나이 초과 → F04 아니라 기존 룰이 미충족',
-    diag: tweak((d) => { d.applicant.age = { value: 40, source: 'USER_DECLARED' }; }),
+    name: '만 19세 미만 → F04 아니라 HUG 상품 룰이 미충족',
+    diag: tweak((d) => { d.applicant.age = { value: 18, source: 'USER_DECLARED' }; }),
     expectIssues: [],
     expectRule: { ruleId: 'KB-HUG-AGE', verdict: 'PUBLIC_REQUIREMENT_UNMET' },
   },
