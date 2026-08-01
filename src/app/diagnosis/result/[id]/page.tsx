@@ -6,7 +6,7 @@ import { PathComparison } from '@/features/result/components/PathComparison';
 import { ActionPlanPanel } from '@/features/result/components/ActionPlanPanel';
 import { buildActionPlan } from '@/features/result/action-plan';
 import { normalizeStoredResults } from '@/features/result/normalize';
-import { DeleteCaseButton } from './DeleteCaseButton';
+import { DeleteCaseButton } from '@/features/result/components/DeleteCaseButton';
 
 export default async function ResultDetailPage({ params }: { params: { id: string } }) {
   const supabase = getServerSupabase();

@@ -36,7 +36,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {/* 390px 미만에서는 마크만 남긴다. 네비 항목이 3개라 그 아래에서는 워드마크를
                   넣는 순간 간격이 0px 이 된다 (측정: 360px→0px, 390px→25px). */}
               <span aria-hidden className="h-4 w-px bg-slate-200 max-[389px]:hidden" />
-              <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight max-[389px]:hidden sm:text-[15px]">
+              {/* 워드마크만 KB Dark Gray — 노랑 마크와 같은 웜톤이라 로고 옆에서 한 덩어리로 읽힌다 */}
+              <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight text-kbgray-dark max-[389px]:hidden sm:text-[15px]">
                 전세 코파일럿
               </span>
               <span className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 sm:inline">
@@ -72,11 +73,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
         <footer className="border-t border-slate-200 bg-white">
           <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-            <p className="text-xs leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-kbgray">
               본 서비스는 공개된 상품·보증 요건과 입력값을 결정론적으로 대조해 보여주는 사전점검 도구입니다.
               결과는 대출 승인 또는 보증 가능성을 의미하지 않으며, 최종 판단은 취급 영업점과 보증기관의 심사에 따릅니다.
             </p>
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="mt-2 text-[11px] text-kbgray/70">
               데모 환경 · 실제 개인정보를 입력하지 마세요
             </p>
           </div>

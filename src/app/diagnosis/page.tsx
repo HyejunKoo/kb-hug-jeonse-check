@@ -313,14 +313,10 @@ export default function DiagnosisPage() {
       )}
 
       {/* ---------- 페이지 헤더 ---------- */}
+      {/* 서비스명은 헤더 워드마크가 이미 말한다. 여기서는 지금 하는 일만 적는다.
+          내부 기능코드(F05·F06)는 팀 용어라 사용자 화면에 노출하지 않는다. */}
       <header className="mb-7">
-        <p className="eyebrow">계약 전 사전점검</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">KB 전세 코파일럿</h1>
-          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-            F05·F06 · KB HUG MVP
-          </span>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">계약 전 사전점검</h1>
         <p className="mt-2 text-sm text-slate-500">
           공개요건과 입력값을 결정론적으로 대조합니다. 결과는 승인·보증 가능성을 의미하지 않습니다.
         </p>
@@ -332,27 +328,36 @@ export default function DiagnosisPage() {
           {STEPS.map((s, i) => {
             const done = i < step;
             const now = i === step;
+            // 이미 지나온 단계는 눌러서 돌아갈 수 있게 한다. 앞 단계는 입력 검증을 건너뛰게
+            // 되므로 잠가 둔다 (결과 화면에서는 어디로도 점프하지 않는다).
+            const canJump = done && step < 3;
+            const Dot = canJump ? 'button' : 'span';
             return (
               <li key={s.t} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
-                <div className="flex items-center gap-2">
+                <Dot
+                  {...(canJump
+                    ? { type: 'button' as const, onClick: () => setStep(i), 'aria-label': `${s.t} 단계로 돌아가기` }
+                    : {})}
+                  className={`flex items-center gap-2 rounded-full ${canJump ? 'cursor-pointer' : ''}`}
+                >
                   <span
                     aria-current={now ? 'step' : undefined}
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[12px] font-bold transition ${
                       now
                         ? 'border-kb-500 bg-kb-500 text-kb-900'
                         : done
-                          ? 'border-slate-300 bg-slate-800 text-white'
+                          ? `border-slate-300 bg-slate-800 text-white ${canJump ? 'hover:bg-slate-600' : ''}`
                           : 'border-slate-200 bg-white text-slate-400'
                     }`}
                   >
                     {done ? '✓' : i + 1}
                   </span>
                   <span
-                    className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'}`}
+                    className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'} ${canJump ? 'hover:text-slate-600' : ''}`}
                   >
                     {s.t}
                   </span>
-                </div>
+                </Dot>
                 {i < STEPS.length - 1 && (
                   <span className={`mx-2 h-px flex-1 ${done ? 'bg-slate-400' : 'bg-slate-200'}`} />
                 )}
@@ -856,14 +861,17 @@ export default function DiagnosisPage() {
   );
 }
 
+/**
+ * 아직 지나오지 않은 단계의 값은 아예 감춘다.
+ * 색만 흐리게 하면 폼 기본값(보증금 2억 등)이 1단계에서부터 보여서, 사용자가 자기가
+ * 입력한 값으로 착각한다.
+ */
 function SummaryRow({ k, v, on }: { k: string; v: string; on: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-slate-400">{k}</dt>
-      <dd
-        className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}
-      >
-        {v}
+      <dd className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}>
+        {on ? v : '—'}
       </dd>
     </div>
   );

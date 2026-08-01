@@ -49,7 +49,11 @@ export default function Home() {
                 사전점검 시작
                 <span aria-hidden>→</span>
               </Link>
-              <span className="text-xs text-slate-500">로그인 없이 · 약 3분 소요</span>
+              {/* 판정 실행은 로그인 필수다. '로그인 없이'로 적으면 3단계까지 다 입력한 뒤
+                  로그인 벽을 만나게 되므로, 어디서 로그인이 필요한지 미리 알린다. */}
+              <span className="text-xs text-slate-500">
+                입력 약 3분 · <b className="font-semibold text-slate-600">결과 확인은 로그인 필요</b>
+              </span>
             </div>
           </div>
         </div>
