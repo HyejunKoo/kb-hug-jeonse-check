@@ -40,9 +40,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight text-kbgray-dark max-[389px]:hidden sm:text-[15px]">
                 전세 코파일럿
               </span>
-              <span className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 sm:inline">
-                MVP
-              </span>
             </Link>
             {/* 좁은 폭에서 '저장 이력'·'전세 코파일럿'이 두 줄로 깨지지 않게 한다.
                 항목이 3개라 390px 에서는 btn-ghost 의 px-3 를 그대로 두면 워드마크와 맞닿는다 —
