@@ -33,12 +33,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 priority
                 className="h-[26px] w-auto transition-opacity duration-150 group-hover:opacity-75"
               />
-              {/* 390px 미만에서는 마크만 남긴다. 네비 항목이 3개라 그 아래에서는 워드마크를
-                  넣는 순간 간격이 0px 이 된다 (측정: 360px→0px, 390px→25px). */}
-              <span aria-hidden className="h-4 w-px bg-slate-200 max-[389px]:hidden" />
+              {/* 412px 미만에서는 마크만 남긴다. 네비 항목이 3개라 그 아래에서는 워드마크를
+                  넣는 순간 간격이 거의 사라진다 (측정: 360px→0px, 390px→5px, 412px→27px). */}
+              <span aria-hidden className="h-4 w-px bg-slate-200 max-[411px]:hidden" />
               {/* 워드마크만 KB Dark Gray — 노랑 마크와 같은 웜톤이라 로고 옆에서 한 덩어리로 읽힌다 */}
-              <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight text-kbgray-dark max-[389px]:hidden sm:text-[15px]">
-                전세 코파일럿
+              <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight text-kbgray-dark max-[411px]:hidden sm:text-[15px]">
+                KB 전세 코파일럿
               </span>
             </Link>
             {/* 좁은 폭에서 '저장 이력'·'전세 코파일럿'이 두 줄로 깨지지 않게 한다.

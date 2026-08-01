@@ -393,7 +393,8 @@ export default function DiagnosisPage() {
                   <input
                     type="number"
                     className="inp"
-                    value={applicant.age}
+                    value={applicant.age || ''}
+                    placeholder="예: 28"
                     inputMode="numeric"
                     onChange={(e) => set('age', Number(e.target.value))}
                   />
@@ -520,17 +521,19 @@ export default function DiagnosisPage() {
                   <input
                     type="number"
                     className="inp"
-                    value={contract.deposit}
+                    value={contract.deposit || ''}
+                    placeholder="예: 200000000"
                     inputMode="numeric"
                     onChange={(e) => setC('deposit', Number(e.target.value))}
                   />
                 </Row>
 
-                <Row label="계약기간 (개월)" required>
+                <Row label="계약기간 (개월)" required hint="보통 24개월(2년)입니다.">
                   <input
                     type="number"
                     className="inp"
-                    value={contract.termMonths}
+                    value={contract.termMonths || ''}
+                    placeholder="예: 24"
                     inputMode="numeric"
                     onChange={(e) => setC('termMonths', Number(e.target.value))}
                   />

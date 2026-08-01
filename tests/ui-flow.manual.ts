@@ -67,9 +67,11 @@ async function main() {
     await shot(page, 'logged-in');
     pass('로그인');
 
-    // ---- 1단계 신청인 (기본값 그대로) ----
+    // ---- 1단계 신청인 ----
+    // 숫자 입력은 기본값이 비어 있다(예시는 placeholder). 채우지 않으면 검증에서 막힌다.
     await page.goto(`${BASE}/diagnosis`, { waitUntil: 'networkidle' });
     await page.waitForSelector('text=1. 신청인 조건', { timeout: 30_000 });
+    await page.fill('input[type="number"]', '28');
     await page.click('button:has-text("다음")');
 
     // ---- 2단계 예정 계약 ----
