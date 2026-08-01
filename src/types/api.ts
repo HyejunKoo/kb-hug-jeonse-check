@@ -67,6 +67,16 @@ export interface ActionPlan {
   items: ActionItem[];
 }
 
+/** 결과 화면 최상단 결론의 심각도. 색·배치를 고르는 데만 쓰고 판정 언어(Verdict)를 대체하지 않는다. */
+export type OutcomeTone = 'critical' | 'warning' | 'caution' | 'info' | 'clear';
+
+export interface ResultOutcome {
+  label: string;
+  tone: OutcomeTone;
+  /** 이 상태가 무슨 뜻인지 한 줄 */
+  detail: string;
+}
+
 // ---- 라우트별 계약 ----
 export type CheckRequest = DiagnosisCase;
 export interface CheckResponse {

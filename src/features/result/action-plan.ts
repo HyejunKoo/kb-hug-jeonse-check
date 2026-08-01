@@ -15,6 +15,7 @@ import type {
   ActionSeverity,
   CheckResult,
   PathResult,
+  ResultOutcome,
   Verdict,
 } from '@/types';
 
@@ -251,6 +252,62 @@ export function buildActionPlan(pathResults: PathResult[]): ActionPlan {
     headline: buildHeadline(items, results, contractHoldRecommended),
     contractHoldRecommended,
     items,
+  };
+}
+
+// ---------- 결과 화면 최상단 한 줄 결론 ----------
+
+/**
+ * "그래서 지금 계약해도 되나"에 먼저 답하는 한 줄 결론.
+ * 판정을 새로 만들지 않고 이미 나온 verdict 들을 심각도 순으로 훑어 가장 무거운 것을 고른다.
+ * 같은 pathResults → 항상 같은 결론.
+ *
+ * UNMET 인데 계약 보류 대상이 아닌 경우(연령 미달·직거래 등)를 위한 상태가 따로 있다.
+ * 이걸 'KB 상담 확인 필요'로 묶으면 확정 충돌을 단순 문의사항처럼 보이게 만든다.
+ */
+export function summarizeOutcome(pathResults: PathResult[], plan: ActionPlan): ResultOutcome {
+  const results = pathResults.flatMap((p) => p.results);
+  const has = (v: Verdict) => results.some((r) => r.verdict === v);
+
+  if (plan.contractHoldRecommended) {
+    return {
+      label: '계약 보류 권고',
+      tone: 'critical',
+      detail: '목적물·권리관계가 보증 대상에서 벗어납니다. 계약금을 지급하기 전에 멈추세요.',
+    };
+  }
+  if (has('PUBLIC_REQUIREMENT_UNMET')) {
+    return {
+      label: '공개요건 미충족',
+      tone: 'critical',
+      detail: '이 경로의 공개요건과 충돌하는 항목이 있어 지금 조건으로는 진행이 어렵습니다.',
+    };
+  }
+  if (has('MISSING_INFORMATION')) {
+    return {
+      label: '자료 보완 필요',
+      tone: 'warning',
+      detail: '판정에 필요한 값이 아직 확보되지 않아 일부 요건을 대조하지 못했습니다.',
+    };
+  }
+  if (has('PRE_GUARANTEE_ACTION_REQUIRED')) {
+    return {
+      label: '보증 전 선행조치 필요',
+      tone: 'caution',
+      detail: '현재 상태로는 보증을 실행할 수 없어 이전·말소 등 선행조치가 필요합니다.',
+    };
+  }
+  if (has('OFFICIAL_REVIEW_REQUIRED')) {
+    return {
+      label: 'KB 상담 확인 필요',
+      tone: 'info',
+      detail: '공개정보만으로 판단할 수 없어 기관 심사에서 확인해야 하는 항목이 있습니다.',
+    };
+  }
+  return {
+    label: '확인된 공개요건 충돌 없음',
+    tone: 'clear',
+    detail: '공개 요건과 대조했을 때 걸리는 항목이 발견되지 않았습니다. 승인 의미가 아닙니다.',
   };
 }
 

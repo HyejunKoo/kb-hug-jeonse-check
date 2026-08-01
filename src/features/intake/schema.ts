@@ -2,8 +2,11 @@
 // 명세 F-01 입력 필드 정의·완료 조건 기준
 import type { ApplicantInput, PlannedContractInput, Property } from '@/types';
 
+// 숫자 입력은 0으로 비워 둔다. 그럴듯한 값(28세·2억·24개월)을 미리 채워두면 사용자가 자기
+// 값으로 착각한 채 넘어간다 — 화면에서는 0을 빈 칸으로 그리고 placeholder 로 예시를 보여준다.
+// 0 은 validateApplicant·validateContract 가 이미 오류로 잡으므로 그냥 통과할 수 없다.
 export const DEFAULT_APPLICANT: ApplicantInput = {
-  age: 28,
+  age: 0,
   householdHead: 'YES',
   homeCount: 0,
   maritalStatus: 'SINGLE',
@@ -13,8 +16,8 @@ export const DEFAULT_APPLICANT: ApplicantInput = {
 };
 
 export const DEFAULT_CONTRACT: PlannedContractInput = {
-  deposit: 200000000,
-  termMonths: 24,
+  deposit: 0,
+  termMonths: 0,
   moveInDate: '',
   brokered: true,
 };

@@ -67,9 +67,11 @@ async function main() {
     await shot(page, 'logged-in');
     pass('로그인');
 
-    // ---- 1단계 신청인 (기본값 그대로) ----
+    // ---- 1단계 신청인 ----
+    // 숫자 입력은 기본값이 비어 있다(예시는 placeholder). 채우지 않으면 검증에서 막힌다.
     await page.goto(`${BASE}/diagnosis`, { waitUntil: 'networkidle' });
     await page.waitForSelector('text=1. 신청인 조건', { timeout: 30_000 });
+    await page.fill('input[type="number"]', '28');
     await page.click('button:has-text("다음")');
 
     // ---- 2단계 예정 계약 ----
@@ -105,14 +107,36 @@ async function main() {
     if (items === 0) fail('F10 액션 항목', '패널은 떴는데 항목이 0개다');
     else pass('F10 액션 항목', `${items}건`);
 
+    // 사용자는 규칙 목록보다 결론·다음 행동을 먼저 봐야 한다 — 세로 순서를 고정한다.
+    // evaluate 에 함수를 넘기면 tsx(esbuild)가 주입한 __name 헬퍼가 브라우저에서 터진다
+    // (ReferenceError: __name is not defined). 문자열 표현식으로 넘겨 변환을 피한다.
+    const order = (await page.evaluate(`(function () {
+      function y(sel) {
+        var el = document.querySelector(sel);
+        return el ? Math.round(el.getBoundingClientRect().top + window.scrollY) : -1;
+      }
+      return { summary: y('main section'), plan: y('#action-plan'), detail: y('details.card') };
+    })()`)) as { summary: number; plan: number; detail: number };
+    if (order.summary < 0 || order.plan < 0 || order.detail < 0) {
+      fail('결과 화면 순서', `찾지 못한 영역: ${JSON.stringify(order)}`);
+    } else if (!(order.summary < order.plan && order.plan < order.detail)) {
+      fail('결과 화면 순서', `종합요약 → 다음행동 → 판정상세가 아니다: ${JSON.stringify(order)}`);
+    } else pass('결과 화면 순서', '종합요약 → 다음행동 → 판정상세');
+
     // ---- F11 동의 게이트 ----
-    const btn = page.locator('button:has-text("KB 상담용 요약 생성")');
-    if (!(await btn.isDisabled())) fail('동의 전 요약 생성 차단', '동의 없이 버튼이 활성 상태다');
-    else pass('동의 전 요약 생성 차단', 'disabled');
+    const btn = page.locator('button:has-text("KB 상담 메모 만들기")');
+    if (!(await btn.isDisabled())) fail('동의 전 메모 생성 차단', '동의 없이 버튼이 활성 상태다');
+    else pass('동의 전 메모 생성 차단', 'disabled');
 
     await page.locator('input[type="checkbox"]').check();
-    if (await btn.isDisabled()) fail('동의 후 요약 생성 허용', '동의했는데 버튼이 잠겨 있다');
-    else pass('동의 후 요약 생성 허용', 'enabled');
+    if (await btn.isDisabled()) fail('동의 후 메모 생성 허용', '동의했는데 버튼이 잠겨 있다');
+    else pass('동의 후 메모 생성 허용', 'enabled');
+
+    // 동의 판단에 필요한 두 가지는 접힘 안으로 숨기면 안 된다
+    const consentText = await page.locator('label:has(input[type="checkbox"])').innerText();
+    const hidden = ['전송', '저장하지 않'].filter((s) => !consentText.includes(s));
+    if (hidden.length) fail('동의 문구 핵심 노출', `접힘에 가려짐: ${hidden.join(', ')}`);
+    else pass('동의 문구 핵심 노출', '전송·미저장 명시');
 
     await btn.click();
     await page.waitForSelector('pre', { timeout: 60_000 });

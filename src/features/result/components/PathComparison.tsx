@@ -27,47 +27,42 @@ function countsOf(result: PathResult): Partial<Record<Verdict, number>> {
 }
 
 export function PathComparison({ results }: { results: PathResult[] }) {
-  const productCandidates = results.filter(
-    (result) =>
-      result.blockedAt !== 'INSUFFICIENT' &&
-      !result.results.some(
-        (row) => row.layer === 'PRODUCT' && row.verdict === 'PUBLIC_REQUIREMENT_UNMET',
-      ),
-  );
+  // MVP 는 HUG 한 경로만 판정한다. 경로가 하나뿐인데 "대조 경로 1개"·"경로 간 순위 아님" 같은
+  // 다중 경로 문구를 남겨두면 사용자에게는 뜻 없는 말이 된다 — 여러 개일 때만 개요를 띄운다.
+  const multiPath = results.length > 1;
 
   return (
     <div className="space-y-6">
-      <section className="card card-body">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          KB HUG 상품·보증 2층 대조
-        </p>
-        <h2 className="mt-1.5 text-xl font-bold tracking-tight">
-          상품 공개요건 충돌 없음 {productCandidates.length}개
-        </h2>
-        <p className="mt-2 text-xs leading-relaxed text-slate-500">
-          상품 자격과 보증기관 요건은 별도 층으로 판정합니다. 아래 결과는 승인·보증서 발급을 뜻하지
-          않습니다.
-        </p>
+      {multiPath && (
+        <section className="card card-body">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            상품·보증 2층 대조
+          </p>
+          <h2 className="mt-1.5 text-xl font-bold tracking-tight">대조 경로 {results.length}개</h2>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            경로 간 순위·추천이 아니라 각 공개요건과 입력값의 독립 대조 결과입니다.
+          </p>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          {results.map((result) => {
-            const status = STATUS[result.blockedAt];
-            return (
-              <a
-                key={result.path}
-                href={`#${result.path}`}
-                className="rounded-xl border border-slate-200 p-3 transition hover:border-slate-300"
-              >
-                <p className="text-sm font-bold text-slate-900">{result.pathLabel}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">
-                  보증기관 · {result.guaranteeProvider}
-                </p>
-                <span className={`badge mt-2 ${status.tone}`}>{status.label}</span>
-              </a>
-            );
-          })}
-        </div>
-      </section>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            {results.map((result) => {
+              const status = STATUS[result.blockedAt];
+              return (
+                <a
+                  key={result.path}
+                  href={`#${result.path}`}
+                  className="rounded-xl border border-slate-200 p-3 transition hover:border-slate-300"
+                >
+                  <p className="text-sm font-bold text-slate-900">{result.pathLabel}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    보증기관 · {result.guaranteeProvider}
+                  </p>
+                  <span className={`badge mt-2 ${status.tone}`}>{status.label}</span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {results.map((result) => {
         const counts = countsOf(result);
@@ -100,6 +95,10 @@ export function PathComparison({ results }: { results: PathResult[] }) {
               {LAYER_ORDER.map((layer) => {
                 const rows = result.results.filter((row) => row.layer === layer);
                 if (rows.length === 0) return null;
+                // 걸리는 항목이 먼저다. '확인된 충돌 없음'은 대개 다수라 그대로 두면 정작 봐야 할
+                // 항목이 묻힌다 — 개수를 밝힌 채 접어두고 필요할 때 펼치게 한다.
+                const attention = rows.filter((row) => row.verdict !== 'NO_PUBLIC_CONFLICT_FOUND');
+                const clear = rows.filter((row) => row.verdict === 'NO_PUBLIC_CONFLICT_FOUND');
                 return (
                   <section key={layer}>
                     <div className="mb-3 flex items-baseline gap-2">
@@ -110,11 +109,27 @@ export function PathComparison({ results }: { results: PathResult[] }) {
                       </h4>
                       <span className="text-xs text-slate-400">{rows.length}개 항목</span>
                     </div>
-                    <div className="space-y-2.5">
-                      {rows.map((row) => (
-                        <ResultCard key={row.ruleId} r={row} />
-                      ))}
-                    </div>
+
+                    {attention.length > 0 && (
+                      <div className="space-y-2.5">
+                        {attention.map((row) => (
+                          <ResultCard key={row.ruleId} r={row} />
+                        ))}
+                      </div>
+                    )}
+
+                    {clear.length > 0 && (
+                      <details className={attention.length > 0 ? 'mt-2.5' : ''}>
+                        <summary className="cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
+                          확인된 충돌 없음 {clear.length}개 항목 보기
+                        </summary>
+                        <div className="mt-2.5 space-y-2.5">
+                          {clear.map((row) => (
+                            <ResultCard key={row.ruleId} r={row} />
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </section>
                 );
               })}

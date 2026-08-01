@@ -24,6 +24,7 @@ import {
 import { RegistryReview } from '@/features/registry/components/RegistryReview';
 import { PathComparison } from '@/features/result/components/PathComparison';
 import { ActionPlanPanel } from '@/features/result/components/ActionPlanPanel';
+import { ResultSummary } from '@/features/result/components/ResultSummary';
 import { buildActionPlan } from '@/features/result/action-plan';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
@@ -313,14 +314,10 @@ export default function DiagnosisPage() {
       )}
 
       {/* ---------- 페이지 헤더 ---------- */}
+      {/* 서비스명은 헤더 워드마크가 이미 말한다. 여기서는 지금 하는 일만 적는다.
+          내부 기능코드(F05·F06)는 팀 용어라 사용자 화면에 노출하지 않는다. */}
       <header className="mb-7">
-        <p className="eyebrow">계약 전 사전점검</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">KB 전세 코파일럿</h1>
-          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-            F05·F06 · KB HUG MVP
-          </span>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">계약 전 사전점검</h1>
         <p className="mt-2 text-sm text-slate-500">
           공개요건과 입력값을 결정론적으로 대조합니다. 결과는 승인·보증 가능성을 의미하지 않습니다.
         </p>
@@ -332,27 +329,36 @@ export default function DiagnosisPage() {
           {STEPS.map((s, i) => {
             const done = i < step;
             const now = i === step;
+            // 이미 지나온 단계는 눌러서 돌아갈 수 있게 한다. 앞 단계는 입력 검증을 건너뛰게
+            // 되므로 잠가 둔다 (결과 화면에서는 어디로도 점프하지 않는다).
+            const canJump = done && step < 3;
+            const Dot = canJump ? 'button' : 'span';
             return (
               <li key={s.t} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
-                <div className="flex items-center gap-2">
+                <Dot
+                  {...(canJump
+                    ? { type: 'button' as const, onClick: () => setStep(i), 'aria-label': `${s.t} 단계로 돌아가기` }
+                    : {})}
+                  className={`flex items-center gap-2 rounded-full ${canJump ? 'cursor-pointer' : ''}`}
+                >
                   <span
                     aria-current={now ? 'step' : undefined}
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[12px] font-bold transition ${
                       now
                         ? 'border-kb-500 bg-kb-500 text-kb-900'
                         : done
-                          ? 'border-slate-300 bg-slate-800 text-white'
+                          ? `border-slate-300 bg-slate-800 text-white ${canJump ? 'hover:bg-slate-600' : ''}`
                           : 'border-slate-200 bg-white text-slate-400'
                     }`}
                   >
                     {done ? '✓' : i + 1}
                   </span>
                   <span
-                    className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'}`}
+                    className={`hidden text-xs sm:inline ${now ? 'font-bold text-slate-900' : 'font-medium text-slate-400'} ${canJump ? 'hover:text-slate-600' : ''}`}
                   >
                     {s.t}
                   </span>
-                </div>
+                </Dot>
                 {i < STEPS.length - 1 && (
                   <span className={`mx-2 h-px flex-1 ${done ? 'bg-slate-400' : 'bg-slate-200'}`} />
                 )}
@@ -387,7 +393,8 @@ export default function DiagnosisPage() {
                   <input
                     type="number"
                     className="inp"
-                    value={applicant.age}
+                    value={applicant.age || ''}
+                    placeholder="예: 28"
                     inputMode="numeric"
                     onChange={(e) => set('age', Number(e.target.value))}
                   />
@@ -514,17 +521,19 @@ export default function DiagnosisPage() {
                   <input
                     type="number"
                     className="inp"
-                    value={contract.deposit}
+                    value={contract.deposit || ''}
+                    placeholder="예: 200000000"
                     inputMode="numeric"
                     onChange={(e) => setC('deposit', Number(e.target.value))}
                   />
                 </Row>
 
-                <Row label="계약기간 (개월)" required>
+                <Row label="계약기간 (개월)" required hint="보통 24개월(2년)입니다.">
                   <input
                     type="number"
                     className="inp"
-                    value={contract.termMonths}
+                    value={contract.termMonths || ''}
+                    placeholder="예: 24"
                     inputMode="numeric"
                     onChange={(e) => setC('termMonths', Number(e.target.value))}
                   />
@@ -729,12 +738,16 @@ export default function DiagnosisPage() {
             </section>
           )}
 
-          {/* ---------- 4. 결과 ---------- */}
+          {/* ---------- 4. 결과 ----------
+              사용자는 규칙 목록보다 "지금 계약해도 되나 / 누구에게 뭘 물어야 하나"를 먼저 본다.
+              종합 결론 → 다음 행동 → 판정 상세 → 상담 메모 순서로 놓는다. */}
           {step === 3 && results.length > 0 && (
             <section className="space-y-6">
-              <PathComparison results={results} />
+              {actionPlan && <ResultSummary results={results} plan={actionPlan} />}
 
               {actionPlan && <ActionPlanPanel plan={actionPlan} />}
+
+              <PathComparison results={results} />
 
               {caseId ? (
                 <p className="text-xs font-semibold text-emerald-700">
@@ -749,9 +762,16 @@ export default function DiagnosisPage() {
                 </p>
               )}
 
-              {/* F11 — 동의한 경우에만 입력값·판정을 요약 생성에 사용한다 */}
+              {/* F11 — 동의한 경우에만 입력값·판정을 요약 생성에 사용한다.
+                  동의를 판단하는 데 꼭 필요한 두 가지(어디로 전송되는가 / 저장되는가)는
+                  접지 않는다. 접어도 되는 것은 부연뿐이다. */}
               <div className="card card-body space-y-3">
-                <h3 className="text-sm font-bold">KB 상담용 요약 생성</h3>
+                <div>
+                  <h3 className="text-sm font-bold">KB 상담 메모 만들기</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    위 결과를 상담 창구에서 그대로 읽을 수 있는 문장으로 정리합니다.
+                  </p>
+                </div>
                 <label className="flex cursor-pointer gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
                   <input
                     type="checkbox"
@@ -760,15 +780,23 @@ export default function DiagnosisPage() {
                     onChange={(e) => setReportConsent(e.target.checked)}
                   />
                   <span className="text-xs leading-relaxed text-slate-600">
-                    위에 입력한 값과 그 출처, 판정 결과, 다음 행동 목록이 요약 문장을 다듬기 위해
-                    생성형 AI(Google Gemini)로 전송되는 것에 동의합니다. 요약은 새 판정을 만들지
-                    않고 위 내용을 문장으로 정리하기만 하며,{' '}
-                    <b className="font-semibold text-slate-700">
-                      생성된 요약 텍스트는 저장하지 않고 이 화면에서 보고 복사만
-                    </b>{' '}
-                    할 수 있습니다. 동의하지 않으면 전송하지 않습니다.
+                    입력값과 판정 결과를{' '}
+                    <b className="font-semibold text-slate-800">생성형 AI(Google Gemini)로 전송</b>
+                    하는 데 동의합니다. 만들어진 메모는{' '}
+                    <b className="font-semibold text-slate-800">저장하지 않습니다.</b>
                   </span>
                 </label>
+                <details className="text-[11px] leading-relaxed text-slate-500">
+                  <summary className="cursor-pointer font-semibold text-slate-600">
+                    무엇이 전송되고 어떻게 쓰이나요?
+                  </summary>
+                  <p className="mt-2">
+                    1·2·3단계에 입력한 값과 그 출처, 위 판정 결과, 다음 행동 목록이 전송됩니다.
+                    AI 는 새 판정·수치를 만들지 않고 이 내용을 문장으로 정리하기만 하며, 승인
+                    가능성을 언급하지 않습니다. 만들어진 메모는 이 화면에서 보고 복사만 할 수
+                    있고 서버에 남지 않습니다. 동의하지 않으면 전송 자체를 하지 않습니다.
+                  </p>
+                </details>
 
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -790,9 +818,9 @@ export default function DiagnosisPage() {
                     className="btn-main"
                     onClick={onMakeReport}
                     disabled={loading || !reportConsent}
-                    title={reportConsent ? undefined : '동의해야 요약을 생성할 수 있습니다.'}
+                    title={reportConsent ? undefined : '동의해야 메모를 만들 수 있습니다.'}
                   >
-                    {loading ? '생성 중…' : 'KB 상담용 요약 생성'}
+                    {loading ? '만드는 중…' : 'KB 상담 메모 만들기'}
                   </button>
                 </div>
 
@@ -806,7 +834,7 @@ export default function DiagnosisPage() {
               {report && (
                 <div className="card">
                   <div className="card-head flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-bold">KB 상담용 요약</h3>
+                    <h3 className="text-sm font-bold">KB 상담 메모</h3>
                     <button className="btn-ghost" onClick={onCopyReport}>
                       {copied ? '복사됨' : '복사'}
                     </button>
@@ -856,14 +884,17 @@ export default function DiagnosisPage() {
   );
 }
 
+/**
+ * 아직 지나오지 않은 단계의 값은 아예 감춘다.
+ * 색만 흐리게 하면 폼 기본값(보증금 2억 등)이 1단계에서부터 보여서, 사용자가 자기가
+ * 입력한 값으로 착각한다.
+ */
 function SummaryRow({ k, v, on }: { k: string; v: string; on: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-slate-400">{k}</dt>
-      <dd
-        className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}
-      >
-        {v}
+      <dd className={`truncate text-right font-semibold ${on ? 'text-slate-800' : 'text-slate-300'}`}>
+        {on ? v : '—'}
       </dd>
     </div>
   );

@@ -49,7 +49,7 @@ export default function Home() {
                 사전점검 시작
                 <span aria-hidden>→</span>
               </Link>
-              <span className="text-xs text-slate-500">로그인 없이 · 약 3분 소요</span>
+              <span className="text-xs text-slate-500">약 3분 소요</span>
             </div>
           </div>
         </div>
