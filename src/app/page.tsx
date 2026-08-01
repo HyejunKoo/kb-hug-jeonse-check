@@ -37,12 +37,20 @@ export default function Home() {
               </span>{' '}
               먼저 확인하세요.
             </h1>
-            <p className="mt-5 text-[15px] leading-relaxed text-slate-600">
-              내 조건과 선택한 매물을 <b className="font-semibold text-slate-900">KB 상품요건</b>과{' '}
-              <b className="font-semibold text-slate-900">HUG·HF·SGI 보증요건</b> 두 층에 각각
-              대조합니다. 예측하지 않고, 공개된 요건과 입력값을 그대로 비교해 근거와 출처를 붙여
-              보여줍니다.
-            </p>
+            {/* 문장마다 줄을 나눈다. 한 덩어리로 두면 '각각 / 대조합니다' 처럼 문장 중간에서
+                줄이 갈린다. break-keep(word-break: keep-all)은 한국어 어절 중간이 아니라
+                띄어쓰기에서만 줄바꿈되게 한다. */}
+            <div className="mt-5 space-y-1.5 break-keep text-[15px] leading-relaxed text-slate-600">
+              <p>
+                내 조건과 선택한 매물을{' '}
+                <b className="font-semibold text-slate-900">KB 상품요건</b>과{' '}
+                <b className="font-semibold text-slate-900">HUG·HF·SGI 보증요건</b> 두 층에 각각
+                대조합니다.
+              </p>
+              <p>
+                예측하지 않고, 공개된 요건과 입력값을 그대로 비교해 근거와 출처를 붙여 보여줍니다.
+              </p>
+            </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/diagnosis" className="btn-main px-5 py-3 text-[15px]">
