@@ -131,6 +131,20 @@ npm run lint && npm run typecheck && npm run build
   `llm:true` 를 보려면 키 문제부터 풀어야 한다.
 - **콘솔의 `_rsc` `ERR_ABORTED` 는 무시해도 된다.** Next 의 RSC prefetch 가 취소된 것으로,
   `page.on('console')` 의 error 로는 잡히지 않는다(`requestfailed` 로만 보인다).
+- **dev 서버가 떠 있는 채로 `npm run build` 를 돌리지 마라.** 같은 `.next` 를 공유해서
+  프로덕션 산출물이 dev 청크를 덮어쓴다. 그러면 브라우저가 청크를 404 로 못 받고 하이드레이션이
+  죽는데, 화면은 멀쩡히 그려져서 원인을 찾기 어렵다 — 증상은 "로그인 폼이 JS 없이 네이티브
+  GET 으로 제출됨"(URL 이 `/login?` 이 된다). 순서를 지키거나, 이미 겪었다면:
+
+  ```powershell
+  # dev 중지 → 캐시 제거 → 재기동
+  Get-NetTCPConnection -LocalPort 3000 -State Listen |
+    Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }
+  Remove-Item -Recurse -Force .next
+  ```
+- **`next dev` 가 `listen EFAULT: bad address ... :::3000` 으로 죽으면** IPv6 `::` 바인딩을
+  Windows 가 거부한 것이다. `-H 127.0.0.1` 로 호스트를 명시해 띄우고, 브라우저도
+  `localhost` 대신 `127.0.0.1:3000` 으로 접속하라.
 
 ## Troubleshooting
 
