@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { PathComparison } from '@/features/result/components/PathComparison';
+import { ActionPlanPanel } from '@/features/result/components/ActionPlanPanel';
+import { buildActionPlan } from '@/features/result/action-plan';
 import { normalizeStoredResults } from '@/features/result/normalize';
 import { DeleteCaseButton } from './DeleteCaseButton';
 
@@ -42,6 +44,13 @@ export default async function ResultDetailPage({ params }: { params: { id: strin
       </div>
 
       <PathComparison results={results} />
+
+      {/* F10은 저장하지 않는다 — 저장된 pathResults로 같은 순수 함수를 다시 돌려 만든다 */}
+      {results.length > 0 && (
+        <div className="mt-6">
+          <ActionPlanPanel plan={buildActionPlan(results)} />
+        </div>
+      )}
 
       <div className="mt-6">
         <DeleteCaseButton id={data.id} />

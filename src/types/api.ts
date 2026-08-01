@@ -32,12 +32,49 @@ export interface PathResult {
 /** diagnosis_cases.status — 종합 판정 상태 (DB enum과 1:1) */
 export type OverallStatus = 'pass' | 'fail' | 'insufficient' | 'needs_review' | 'needs_action';
 
+// ---- F10 다음 행동 묶음 ----
+// 판정을 새로 만들지 않는다. 이미 나온 CheckResult.nextAction을 "누구에게 무엇을 확인하는가"로
+// 재분류할 뿐이다. 순수 함수는 features/result/action-plan.ts의 buildActionPlan().
+
+/** 이 행동을 누구에게/무엇으로 해야 하는가 */
+export type ActionCategory =
+  | 'SUPPLEMENTAL_DOCUMENT' // 추가로 제출·보완해야 하는 자료
+  | 'LANDLORD_CONFIRMATION' // 임대인에게 확인·요청할 사항
+  | 'BROKER_CONFIRMATION' // 중개사·계약 방식에서 확인할 사항
+  | 'KB_QUESTION' // KB 상담에서 물어볼 질문
+  | 'CONTRACT_HOLD'; // 계약 보류 권고 (공개요건과 확정 충돌)
+
+/** 표시 강조도. 판정 언어가 아니라 UI 우선순위 표시일 뿐이다. */
+export type ActionSeverity = 'info' | 'warning' | 'critical';
+
+export interface ActionItem {
+  /** `${category}:${sourceRuleIds.join('+')}` — 같은 입력이면 항상 같은 id */
+  id: string;
+  category: ActionCategory;
+  severity: ActionSeverity;
+  /** 어떤 항목에서 나온 행동인지 (규칙 label) */
+  title: string;
+  /** 실제 다음 행동 문구 — CheckResult.nextAction 을 그대로 쓴다 */
+  detail: string;
+  /** 이 행동을 만든 규칙·F04 이슈 id (같은 문구는 하나로 합치고 id를 모은다) */
+  sourceRuleIds: string[];
+}
+
+export interface ActionPlan {
+  /** 결정론적으로 고른 한 줄 요약. 승인 가능성을 표현하지 않는다. */
+  headline: string;
+  contractHoldRecommended: boolean;
+  items: ActionItem[];
+}
+
 // ---- 라우트별 계약 ----
 export type CheckRequest = DiagnosisCase;
 export interface CheckResponse {
   pathResults: PathResult[];
   ruleVersion: string;
   ruleSource: RuleSource;
+  /** F10 — pathResults에서 파생되는 값이라 저장하지 않고 매번 다시 계산한다 */
+  actionPlan: ActionPlan;
   /** 로그인 사용자의 판정만 저장되며 이때만 채워진다 */
   caseId?: string;
 }
@@ -90,9 +127,31 @@ export interface OcrErrorResponse {
   code: OcrErrorCode;
 }
 
+// ---- /api/report (F11 KB 상담용 요약) ----
+/**
+ * 고객이 동의한 경우에만 Gemini로 전송한다. consent !== true 면 400이고 Gemini를 호출하지 않는다.
+ * 보고서 텍스트는 저장하지 않는다 — 화면 표시와 복사만 제공한다.
+ */
 export interface ReportRequest {
+  /** 입력값·판정을 Gemini로 보내는 것에 대한 명시 동의. true가 아니면 호출 자체를 하지 않는다 */
+  consent: boolean;
   pathResults: PathResult[];
+  /** 판정에 쓰인 입력값과 출처. 없으면 보고서에서 입력 요약 절만 빠진다 */
+  diagnosis?: DiagnosisCase;
+  /**
+   * 참고용. 서버는 이 값을 신뢰하지 않고 pathResults로 buildActionPlan()을 다시 돌린다 —
+   * 클라이언트가 임의 문구를 프롬프트에 끼워 넣지 못하게 하기 위함.
+   */
+  actionPlan?: ActionPlan;
 }
+
+export type ReportErrorCode = 'INVALID_BODY' | 'CONSENT_REQUIRED' | 'NO_PATH_RESULTS';
+
+export interface ReportErrorResponse {
+  error: string;
+  code: ReportErrorCode;
+}
+
 export interface ReportResponse {
   report: string;
   llm: boolean;
