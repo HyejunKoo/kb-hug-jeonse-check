@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import './globals.css';
 import { getServerSupabase } from '@/lib/supabase/server';
 
@@ -17,16 +18,35 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
-            <Link href="/" className="flex items-center gap-2.5">
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-kb-500 text-[13px] font-black text-kb-900">
-                KB
+            {/* 로고는 여백을 트림한 투명 PNG다 — 헤더가 반투명이라 흰 배경이 남으면 사각형이 비친다.
+                세로 26px 고정, 가로는 원본 비율(1.412)대로. 22px 는 손그림 획이 가늘어 'b'가
+                뭉개지고, 28px 는 h-14 헤더에서 워드마크보다 무거워진다. */}
+            <Link
+              href="/"
+              className="group flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-kb-500/60 focus-visible:ring-offset-2"
+            >
+              <Image
+                src="/logo.png"
+                alt="KB"
+                width={168}
+                height={119}
+                priority
+                className="h-[26px] w-auto transition-opacity duration-150 group-hover:opacity-75"
+              />
+              {/* 390px 미만에서는 마크만 남긴다. 네비 항목이 3개라 그 아래에서는 워드마크를
+                  넣는 순간 간격이 0px 이 된다 (측정: 360px→0px, 390px→25px). */}
+              <span aria-hidden className="h-4 w-px bg-slate-200 max-[389px]:hidden" />
+              <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight max-[389px]:hidden sm:text-[15px]">
+                전세 코파일럿
               </span>
-              <span className="text-[15px] font-bold tracking-tight">전세 코파일럿</span>
               <span className="hidden rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 sm:inline">
                 MVP
               </span>
             </Link>
-            <nav className="flex items-center gap-1">
+            {/* 좁은 폭에서 '저장 이력'·'전세 코파일럿'이 두 줄로 깨지지 않게 한다.
+                항목이 3개라 390px 에서는 btn-ghost 의 px-3 를 그대로 두면 워드마크와 맞닿는다 —
+                sm 미만에서만 좌우 여백을 좁혀 제품명을 지우지 않고 자리를 만든다. */}
+            <nav className="flex items-center gap-1 whitespace-nowrap [&_a]:px-2 [&_button]:px-2 sm:[&_a]:px-3 sm:[&_button]:px-3">
               <Link href="/diagnosis" className="btn-ghost">사전점검</Link>
               {user ? (
                 <>
