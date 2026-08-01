@@ -174,7 +174,15 @@ Supabase 활성 스냅샷 조회 → 없을 때만 KB·HUG 두 공시 크롤링 
   - 규칙팩에 새 ruleId를 추가하면 `action-plan.ts`의 `CONTRACT_HOLD_RULE_IDS`·`ROUTES`도 함께 확인하라
 - [완료] F11 KB 상담용 요약 동의 게이트. 결과 화면 체크박스에 동의해야 `/api/report`가 호출되고,
   입력값·출처·HUG 판정·F10 액션이 함께 전송된다. 보고서 텍스트는 저장하지 않는다.
-  - 테스트: `npx tsx --tsconfig tsconfig.json tests/f10-f11.manual.ts` (F10 10케이스 + /api/report 6케이스)
+  - 테스트: `npx tsx --tsconfig tsconfig.json tests/f10-f11.manual.ts` (F10 10케이스 + /api/report 16케이스)
+- [완료] UI 수동 테스트 `tests/ui-flow.manual.ts` — 헤드리스 Chromium(playwright)으로 로그인부터
+  결과·동의·보고서·이력 상세까지 몰고 간다. 판정 로직이 아니라 **화면에서만 드러나는 것**(F10 패널
+  렌더, 동의 전 버튼 잠김, 콘솔 에러)을 본다.
+  - `npm run dev` 를 먼저 띄우고, 최초 1회 `npx playwright install chromium` (브라우저는 전역 캐시)
+  - `UI_TEST_EMAIL=... UI_TEST_PASSWORD=... npx tsx --tsconfig tsconfig.json tests/ui-flow.manual.ts`
+    (판정 실행이 로그인 필수라 계정이 필요하다. **계정을 코드·문서에 적지 마라**)
+  - 함정: 로그인 완료를 URL로 기다리면 안 된다. `/login?next=/diagnosis` 가 이미 매칭돼 즉시 통과하고
+    세션 쿠키가 써지기 전에 넘어간다 — 헤더의 '로그아웃'이 뜨는 것을 기다려라
 
 ## 작업 방식
 
