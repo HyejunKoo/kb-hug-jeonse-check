@@ -17,8 +17,12 @@
 - Next.js 14 App Router + TypeScript (Next 15 업그레이드 금지)
 - Tailwind CSS. UI 라이브러리 추가 금지 (shadcn은 팀 합의 시에만)
 - 백엔드: `app/api/*/route.ts` Route Handler로만. 별도 서버·Express 금지
-- DB: Supabase(Postgres), `@supabase/supabase-js`. 접근은 `lib/supabase.ts`의 `getSupabase()`로만
+- DB·인증: Supabase(Postgres), `@supabase/supabase-js` + `@supabase/ssr`. 접근은 `lib/supabase/`의
+  `getSupabaseAdmin()`(service_role)·`getServerSupabase()`(요청자 세션)·`getBrowserSupabase()`(브라우저 anon)로만.
+  직접 `createClient()`를 부르지 마라
 - LLM: Google Gemini (`@google/generative-ai`). 호출은 `app/api/report/route.ts` 안에서만
+- OCR: NAVER CLOVA General OCR (유료·과금). 호출은 `app/api/ocr/route.ts` 안에서만.
+  `features/registry/parser.ts`는 그 응답을 파싱하는 순수 함수일 뿐 호출하지 않는다
 - 배포: Vercel. 도커·AWS 금지. 각 route에 `export const maxDuration` 유지
 
 ## 폴더 구조 (이 구조를 유지하라. 새 최상위 폴더 만들지 마라)
@@ -37,7 +41,7 @@ src/app/api/report/route.ts       상담 리포트 (후속 에이전트)
 src/features/intake/              F01 입력 schema·mapper·components (1번)
 src/features/building/            건축HUB client·mapper (1번)
 src/features/registry/            등기부 parser·확인 UI (2번)
-src/features/result/              formatter·ResultCard (후속 에이전트)
+src/features/result/              formatter·ResultCard·action-plan(F10 buildActionPlan)·ActionPlanPanel (후속 에이전트)
 src/lib/rule-engine/              index=엔진, evaluator=체크 함수 (3번), sufficiency=F04 자료 충분성 검사
 src/lib/crawlers/                 KB·HUG 검증형 크롤러 + HTTP·DB 우선 provider(3번)
 src/lib/supabase/                 server(getSupabaseAdmin=service_role, getServerSupabase=요청자 세션)·client(브라우저 anon)
@@ -58,12 +62,31 @@ supabase/schema.sql               DB 스키마
 ## 절대 규칙 (위반 금지)
 
 1. **판정은 `src/lib/rule-engine/` 순수 함수만 한다.** Gemini/LLM에게 판정·수치 생성 절대 금지
-2. Gemini는 `lib/gemini/client.ts` 를 통해 `report/route.ts` 안에서만 문장 다듬기만. 템플릿에 없는 판정·수치·확률·승인 가능성 언급을 추가하면 안 됨. Gemini 실패 시 템플릿으로 폴백하는 현재 구조 유지
+2. **외부 AI 서비스는 두 개뿐이고 각각 정해진 route 안에서만 부른다.** 새 provider를 임의로 붙이지 마라
+   - Gemini: `lib/gemini/client.ts` 를 통해 `report/route.ts` 안에서만, 문장 다듬기만. 템플릿에 없는
+     판정·수치·확률·승인 가능성 언급을 추가하면 안 됨. Gemini 실패 시 템플릿으로 폴백하는 현재 구조 유지
+   - CLOVA OCR: `ocr/route.ts` 안에서만. 등기부 원본이 외부로 나가는 경로라 파일 형식·용량 검증과
+     `lib/rate-limit.ts` 제한을 통과한 뒤에만 호출한다(유료 API). 추출값은 고객이 화면에서 확인하기
+     전까지 판정에 쓰지 않는다
 3. API 키는 `process.env` 로만. 하드코딩 금지. `.env*` 는 `.gitignore` 유지
-4. Gemini 호출·DB 접근은 `app/api/` 서버 코드 안에서만. 클라이언트 컴포넌트에서 직접 금지
-5. 타입은 `src/types/` 에 정의된 것만 사용(`@/types` 배럴로 import). 새 타입은 case/rule/api 중 맞는 파일에 추가
-6. 데모는 샘플 데이터만. 실명·주민번호 등 실제 개인정보 수집·저장 금지
-7. 규칙 추가/수정 시: 해당 상품/기관 JSON에 규칙 추가 + `rule-engine/evaluator.ts` CHECKERS에 함수 추가. 수치(params)를 임의로 지어내지 말고, 모르면 주석으로 "검수 필요" 표시하고 나에게 물어라
+4. **Gemini·CLOVA 호출과 service_role 접근은 서버 코드에서만.** 클라이언트 컴포넌트에서 직접 금지.
+   DB 읽기는 `app/api/` 전용이 아니다 — Auth를 붙이면서 서버 컴포넌트(`app/diagnosis/result/[id]`)·
+   `middleware.ts`가 `getServerSupabase()`로 요청자 세션 범위에서 직접 조회하는 것이 정상 패턴이 됐다.
+   브라우저에서는 `getBrowserSupabase()`(anon)로 세션 확인까지만 하고 진단 데이터를 직접 읽지 마라
+5. **도메인 타입**(판정 입력·규칙·API 계약)은 `src/types/`(case/rule/api)에만 두고 `@/types` 배럴로 import한다.
+   한 모듈 안에서만 쓰는 보조 타입(`JusoItem`·`CheckOutcome`·`SufficiencyIssue` 등)은 그 파일에 둬도 된다 —
+   다른 파일이 import하기 시작하면 그때 `src/types/`로 올려라
+6. 데모 입력은 샘플 데이터만. **실명·주민번호를 폼으로 수집하지 마라.**
+   등기부 OCR은 예외적으로 실제 문서를 받는다 — 소유자 실명은 `ownerNameCandidates`로 추출해 고객이
+   화면에서 임대인명과 대조하는 데만 쓰고, `RegistryInfo`·DB `payload`에는 절대 넣지 않는다(대조 결과만 저장).
+   이 경계를 무너뜨리는 변경 금지
+7. 규칙 추가/수정 시 **네 곳을 함께 본다**. 수치(params)를 임의로 지어내지 말고, 모르면 주석으로
+   "검수 필요" 표시하고 나에게 물어라
+   1. 해당 상품/기관 JSON(`src/rules/*.json`)에 규칙 추가 — 폴백 경로
+   2. `rule-engine/evaluator.ts` CHECKERS에 체크 함수 추가
+   3. `lib/crawlers/hug.ts`·`kb.ts`에도 같은 `ruleId`로 추가 — **빠뜨리면 CRAWLED 팩에서만 규칙이
+      사라져서, JSON 폴백일 때만 동작하는 재현 어려운 버그가 된다**
+   4. 계약 보류 대상이면 `features/result/action-plan.ts`의 `CONTRACT_HOLD_RULE_IDS`에 등록
 8. env 키가 하나도 없어도 전체 플로우가 돌아가야 한다 (키 없음 → 자료 부족 판정 / 템플릿 리포트 / DB 저장 생략). 이 폴백을 깨는 변경 금지
 9. 파괴적 작업(파일 대량 삭제, 의존성 메이저 업그레이드, force push) 전에 반드시 나에게 확인
 
@@ -85,7 +108,9 @@ supabase/schema.sql               DB 스키마
 
 ## API 계약 (프론트-백 이 형태 유지)
 
-- `POST /api/check`  body: DiagnosisCase → `{ pathResults, ruleVersion, ruleSource, caseId? }` (MVP에서는 HUG 한 경로, caseId는 로그인 사용자만)
+- `POST /api/check`  body: DiagnosisCase → `{ pathResults, ruleVersion, ruleSource, actionPlan, caseId? }` (MVP에서는 HUG 한 경로, caseId는 로그인 사용자만)
+  - `actionPlan`(F10)은 `pathResults`에서 파생되는 순수 계산이라 **DB에 저장하지 않는다**. 이력 화면은
+    저장된 `pathResults`로 `buildActionPlan()`을 다시 돌려 같은 결과를 얻는다
   - 내부 순서: **F04 충분성 검사 → (통과했을 때만) 규칙팩 실행**. 자료가 부족·상충하면 `runRulePack()`도
     `getRulePack()`도 호출하지 않고(= 크롤링 비용 없음) SUFFICIENCY 층 결과만 담긴
     `blockedAt: 'INSUFFICIENT'`를 돌려준다. 이때 `ruleVersion`은 적용된 규칙이 없다는 뜻으로
@@ -96,7 +121,12 @@ supabase/schema.sql               DB 스키마
 - `GET /api/rules` → 현재 적용 규칙팩 (version·source·rules[]·crawl)
 - `POST /api/building` body: `{ address }` → `{ property: Property, ... }`
 - `POST /api/ocr` (추후 FormData PDF) → `{ registry: RegistryInfo }` — 추출값은 고객 확인 후에만 판정에 사용
-- `POST /api/report` body: `{ pathResults }` → `{ report: string, llm: boolean }`
+- `POST /api/report` body: `{ consent: true, pathResults, diagnosis?, actionPlan? }` → `{ report: string, llm: boolean }`
+  - `consent !== true` 면 `400 { error, code: 'CONSENT_REQUIRED' }` 이고 **Gemini를 호출하지 않는다**
+  - `pathResults`는 `normalize.ts`의 `filterValidPathResults()`로 형식·enum 값까지 검사해 **읽을 수 있는
+    행만 남긴다**. 남는 행이 하나도 없을 때만 `400 INVALID_BODY` (없음·빈 배열은 `NO_PATH_RESULTS`)
+  - 요청의 `actionPlan`은 신뢰하지 않고 서버가 `pathResults`로 다시 계산한다 (프롬프트 주입 방지)
+  - 보고서 텍스트는 저장하지 않는다 — 화면 표시·복사만
 
 ## 규칙팩 공급 흐름 (회의록 합의)
 
@@ -134,6 +164,17 @@ Supabase 활성 스냅샷 조회 → 없을 때만 KB·HUG 두 공시 크롤링 
     (= '영구 자료 부족'에서 '사용자가 확인하면 판정 가능'으로 바뀜)
   - 테스트: `npx tsx --tsconfig tsconfig.json tests/sufficiency.manual.ts` (24케이스)
   - 발급일 검사는 '오늘'에 의존해 완전한 결정론이 아니다. 재현이 필요하면 `validateDiagnosticSufficiency(diag, { today })`로 고정하라
+- [완료] F10 다음 행동 묶음 (`features/result/action-plan.ts`의 `buildActionPlan`). 판정을 새로 만들지 않고
+  `CheckResult.nextAction`을 계약 보류 권고 / 추가 제출·보완 자료 / 임대인 확인사항 / 중개사 확인사항 /
+  KB 상담 질문으로 재분류한다. 결과 화면과 이력 상세에 `ActionPlanPanel`로 노출.
+  - **계약 보류 권고 기준(MVP)**: HUG 단일 경로에서 `CONTRACT_HOLD_RULE_IDS`(대상 외 주택유형·위반건축물·
+    소유자 불일치·권리침해·담보인정비율 초과)가 `PUBLIC_REQUIREMENT_UNMET`일 때만. 상품요건 미충족·자료 부족·
+    공식 심사 필요·선행조치는 보류가 아니라 확인/보완 액션이다
+  - "4개 경로 모두 미충족이면 계약 보류"는 다중 경로 비교가 들어오는 후속 작업의 몫이다
+  - 규칙팩에 새 ruleId를 추가하면 `action-plan.ts`의 `CONTRACT_HOLD_RULE_IDS`·`ROUTES`도 함께 확인하라
+- [완료] F11 KB 상담용 요약 동의 게이트. 결과 화면 체크박스에 동의해야 `/api/report`가 호출되고,
+  입력값·출처·HUG 판정·F10 액션이 함께 전송된다. 보고서 텍스트는 저장하지 않는다.
+  - 테스트: `npx tsx --tsconfig tsconfig.json tests/f10-f11.manual.ts` (F10 10케이스 + /api/report 6케이스)
 
 ## 작업 방식
 

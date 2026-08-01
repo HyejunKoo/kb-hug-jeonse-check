@@ -9,6 +9,7 @@ import { runRulePack, parseRegion } from '@/lib/rule-engine';
 import { validateDiagnosticSufficiency, toSufficiencyResults } from '@/lib/rule-engine/sufficiency';
 import { getRulePack, getFallbackRuleVersion } from '@/lib/crawlers/rule-provider';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { buildActionPlan } from '@/features/result/action-plan';
 import type { CheckRequest, OverallStatus, PathResult, RuleSource } from '@/types';
 
 export const maxDuration = 30;
@@ -99,10 +100,13 @@ export async function POST(req: Request) {
     }
   }
 
+  // F10은 pathResults에서 파생되는 순수 계산이라 저장하지 않는다 — 이력 화면도 저장된
+  // pathResults로 같은 함수를 다시 돌려서 같은 결과를 얻는다 (DB 마이그레이션 없음).
   return NextResponse.json({
     pathResults,
     ruleVersion,
     ruleSource,
+    actionPlan: buildActionPlan(pathResults),
     caseId,
   });
 }

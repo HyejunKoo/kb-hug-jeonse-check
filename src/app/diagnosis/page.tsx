@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type {
   ApplicantInput, PlannedContractInput, Property, RegistryInfo, PathResult,
+  ActionPlan, DiagnosisCase,
 } from '@/types';
 import {
   DEFAULT_APPLICANT, DEFAULT_CONTRACT, EMPTY_PROPERTY,
@@ -22,6 +23,8 @@ import {
 } from '@/features/intake/components/GuaranteeRatioInputs';
 import { RegistryReview } from '@/features/registry/components/RegistryReview';
 import { PathComparison } from '@/features/result/components/PathComparison';
+import { ActionPlanPanel } from '@/features/result/components/ActionPlanPanel';
+import { buildActionPlan } from '@/features/result/action-plan';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
 const PENDING_KEY = 'kb-pending-diagnosis';
@@ -72,8 +75,13 @@ export default function DiagnosisPage() {
   const [registry, setRegistry] = useState<RegistryInfo | undefined>();
   const [guaranteeValues, setGuaranteeValues] = useState<GuaranteeRatioValues>({});
   const [results, setResults] = useState<PathResult[]>([]);
+  const [actionPlan, setActionPlan] = useState<ActionPlan | null>(null);
+  /** 판정에 실제로 쓰인 입력값 — F11 리포트에 입력값·출처를 함께 넣는 데 쓴다 */
+  const [checkedCase, setCheckedCase] = useState<DiagnosisCase | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [report, setReport] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [reportConsent, setReportConsent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
@@ -160,10 +168,11 @@ export default function DiagnosisPage() {
                 source: 'USER_CONFIRMED_DOCUMENT',
               },
             };
+      const diag = toDiagnosisCase(a, c, propertyForCheck, registryForCheck);
       const res = await fetch('/api/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(toDiagnosisCase(a, c, propertyForCheck, registryForCheck)),
+        body: JSON.stringify(diag),
       });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.pathResults)) {
@@ -171,7 +180,14 @@ export default function DiagnosisPage() {
         return;
       }
       setResults(data.pathResults);
+      // 서버가 안 내려주는 경우에도 같은 순수 함수로 화면에서 다시 만든다 (동일 입력 → 동일 결과)
+      setActionPlan(data.actionPlan ?? buildActionPlan(data.pathResults));
+      setCheckedCase(diag);
       setCaseId(data.caseId ?? null);
+      // 새 판정이면 이전 동의·보고서는 남기지 않는다
+      setReport('');
+      setReportError('');
+      setReportConsent(false);
       setStep(3);
     } finally {
       setLoading(false);
@@ -233,15 +249,26 @@ export default function DiagnosisPage() {
   }, []);
 
   async function onMakeReport() {
-    if (results.length === 0) return;
+    if (results.length === 0 || !reportConsent) return;
     setLoading(true);
+    setReportError('');
     try {
       const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pathResults: results }),
+        body: JSON.stringify({
+          consent: true,
+          pathResults: results,
+          diagnosis: checkedCase ?? undefined,
+          actionPlan: actionPlan ?? undefined,
+        }),
       });
-      setReport((await res.json()).report ?? '');
+      const data = await res.json();
+      if (!res.ok || typeof data.report !== 'string') {
+        setReportError(data.error ?? '요약을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      setReport(data.report);
     } finally {
       setLoading(false);
     }
@@ -707,6 +734,8 @@ export default function DiagnosisPage() {
             <section className="space-y-6">
               <PathComparison results={results} />
 
+              {actionPlan && <ActionPlanPanel plan={actionPlan} />}
+
               {caseId ? (
                 <p className="text-xs font-semibold text-emerald-700">
                   ✓ 저장됨 ·{' '}
@@ -720,22 +749,58 @@ export default function DiagnosisPage() {
                 </p>
               )}
 
-              {/* 액션 */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="btn-sub"
-                  onClick={() => {
-                    setStep(0);
-                    setResults([]);
-                    setCaseId(null);
-                    setReport('');
-                  }}
-                >
-                  처음부터
-                </button>
-                <button className="btn-main" onClick={onMakeReport} disabled={loading}>
-                  {loading ? '생성 중…' : 'KB 상담용 요약 생성'}
-                </button>
+              {/* F11 — 동의한 경우에만 입력값·판정을 요약 생성에 사용한다 */}
+              <div className="card card-body space-y-3">
+                <h3 className="text-sm font-bold">KB 상담용 요약 생성</h3>
+                <label className="flex cursor-pointer gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-kb-500"
+                    checked={reportConsent}
+                    onChange={(e) => setReportConsent(e.target.checked)}
+                  />
+                  <span className="text-xs leading-relaxed text-slate-600">
+                    위에 입력한 값과 그 출처, 판정 결과, 다음 행동 목록이 요약 문장을 다듬기 위해
+                    생성형 AI(Google Gemini)로 전송되는 것에 동의합니다. 요약은 새 판정을 만들지
+                    않고 위 내용을 문장으로 정리하기만 하며,{' '}
+                    <b className="font-semibold text-slate-700">
+                      생성된 요약 텍스트는 저장하지 않고 이 화면에서 보고 복사만
+                    </b>{' '}
+                    할 수 있습니다. 동의하지 않으면 전송하지 않습니다.
+                  </span>
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="btn-sub"
+                    onClick={() => {
+                      setStep(0);
+                      setResults([]);
+                      setActionPlan(null);
+                      setCheckedCase(null);
+                      setCaseId(null);
+                      setReport('');
+                      setReportError('');
+                      setReportConsent(false);
+                    }}
+                  >
+                    처음부터
+                  </button>
+                  <button
+                    className="btn-main"
+                    onClick={onMakeReport}
+                    disabled={loading || !reportConsent}
+                    title={reportConsent ? undefined : '동의해야 요약을 생성할 수 있습니다.'}
+                  >
+                    {loading ? '생성 중…' : 'KB 상담용 요약 생성'}
+                  </button>
+                </div>
+
+                {reportError && (
+                  <p role="alert" className="text-xs font-semibold text-red-700">
+                    {reportError}
+                  </p>
+                )}
               </div>
 
               {report && (
