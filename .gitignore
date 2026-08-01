@@ -41,3 +41,6 @@ OCRsample*.pdf
 *.tsbuildinfo
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# UI 수동 테스트 스크린샷
+/tests/.ui-shots
