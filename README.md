@@ -1,124 +1,171 @@
-# KB 전세 코파일럿 (KB스타 HUG MVP)
+# KB 전세 Check
 
-계약금 지급 전, 신청인·계약·매물 조건을 **KB스타 HUG 상품요건(1층) × HUG 보증요건(2층)** 에 대조해
-**어느 층에서 왜 막히는지** 근거와 함께 보여주는 사전점검 서비스.
+계약금 지급 전 신청인, 예정 계약, 매물, 등기부 정보를 공개 요건과 대조해
+**KB스타 전세자금대출(HUG) 상품요건과 HUG 보증요건 중 어디에서 확인이 필요한지** 보여주는 사전점검 서비스입니다.
 
-MVP에서는 `KB스타 전세자금대출(HUG)` 한 경로만 판정한다.
+현재 MVP가 실제로 판정하고 화면에 노출하는 경로는 `KB_STAR_HUG` 하나입니다. HF, SGI, 청년 HF용 타입과 정적 규칙팩은 이후 확장을 위해 저장소에 남아 있지만 현재 판정에는 사용하지 않습니다.
 
-예측하지 않는다. 공개요건과 입력값을 결정론적으로 대조만 한다.
-판정은 `src/lib/rule-engine/` 순수 함수만 수행하고, Gemini는 상담 요약 문장을 다듬는 역할만 한다.
+판정은 `src/lib/rule-engine/`의 순수 함수가 수행합니다. Gemini는 사용자가 동의한 경우 상담용 요약 문장을 다듬는 데만 사용하며, 판정이나 수치를 만들지 않습니다.
 
-> `확인된 충돌 없음(NO_PUBLIC_CONFLICT_FOUND)` 은 승인·보증 가능을 의미하지 않는다.
+> `확인된 충돌 없음(NO_PUBLIC_CONFLICT_FOUND)`은 대출 승인이나 보증 가능을 의미하지 않습니다.
+
+## 주요 기능
+
+- 신청인 정보, 예정 계약, 주소·건축물대장, 등기부 확인의 4단계 진단
+- 도로명주소 검색 후 건축HUB 표제부 조회 및 주택 유형 매핑
+- PDF/JPG/PNG 등기사항전부증명서 OCR 초안 추출과 사용자 확인
+- 판정 전 자료 충분성·상충 검사(F04)
+- KB 상품요건과 HUG 보증요건의 결정론적 판정 및 공식 근거 표시
+- 판정 결과 기반 다음 행동 목록과 상담용 1페이지 요약
+- Supabase 이메일 인증, 로그인 사용자 진단 저장·조회·삭제
+- 활성 규칙 스냅샷 우선 적용과 최초 부트스트랩 크롤링
+
+## 기술 스택
+
+- Next.js 14 App Router, React 18, TypeScript 5
+- Tailwind CSS 3
+- Supabase Auth/Postgres/RLS
+- NAVER CLOVA General OCR
+- Google Gemini(선택 사항)
+- Playwright(수동 UI 흐름 검사)
 
 ## 빠른 시작
 
-**Node 22 필요** (`.nvmrc` 있음 — nvm 쓰면 `nvm use`). 다른 버전이면 `npm ci`가 `EBADENGINE`으로 실패한다.
+Node.js 22가 필요합니다. `.nvmrc`와 `package.json#engines`도 `22.x`로 고정되어 있습니다.
 
 ```bash
-nvm use                      # 또는 node -v 로 v22.x 확인
-npm ci                       # install 말고 ci (lock 그대로 설치)
-cp .env.example .env.local   # 키는 노션에서 복사 — 아래 참고
-npm run dev                  # http://localhost:3000
+nvm use
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-**실제 조회를 하려면 키가 필요하다.** 키가 없어도 앱이 죽지는 않지만, 공공 API 호출이
-저장해둔 샘플 응답(픽스처)으로 대체된다 — 뭘 검색하든 같은 결과가 나온다.
+Windows PowerShell에서는 환경 파일을 다음처럼 복사할 수 있습니다.
 
-| 없는 키            | 실제로 벌어지는 일                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `JUSO_API_KEY`     | 주소 검색이 **항상** `서울 서초구 강남대로12길 11 (양재동)` 1건만 반환. 검색어와 무관 |
-| `BUILDING_API_KEY` | 건축물대장이 **항상** 같은 샘플 건물로 반환                                           |
-| `GEMINI_API_KEY`   | 결정론적 템플릿 리포트로 폴백 (품질만 다름, 내용은 정상) — **현재 상태**              |
-| Supabase 키        | 저장만 생략, 판정은 정상 반환                                                         |
+```powershell
+Copy-Item .env.example .env.local
+```
 
-앞의 두 개는 **결과가 틀린다.** 화면에 픽스처라는 표시가 나오지 않으니 주의.
-UI·판정 로직만 건드리는 작업이면 키 없이 개발해도 되지만, 데모·QA 전에는 반드시 넣을 것.
-
-**키는 노션에 정리해뒀다. 각자 발급받지 말고 거기서 복사해 `.env.local`에 붙여넣으면 된다.**
-
-`GEMINI_API_KEY`는 **아직 미발급**이다. 없어도 동작에 문제 없고, 상담 요약이 템플릿으로 생성된다.
-발급되면 노션에 추가된다.
-
-`.env.local`은 절대 커밋 금지 (`.gitignore`에 있음).
+개발 서버는 기본적으로 `http://localhost:3000`에서 실행됩니다.
 
 ```bash
-npm run typecheck   # 커밋 전 (빌드보다 빠름)
-npm run build       # 배포 전 최종 확인
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-`tailwind.config.ts` · `next.config.mjs` 를 수정했다면 dev 서버를 재시작해야 반영된다.
+`tailwind.config.ts`나 `next.config.mjs`를 수정했다면 개발 서버를 재시작해야 합니다.
 
-## 구조
+## 환경변수
 
+| 변수                                   | 용도                          | 없을 때 동작                       |
+| -------------------------------------- | ----------------------------- | ---------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase 프로젝트 URL         | 인증·저장·규칙 스냅샷 기능 비활성  |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 브라우저/서버 인증 클라이언트 | 인증·진단 이력 기능 비활성         |
+| `SUPABASE_SERVICE_ROLE_KEY`            | 서버의 규칙 스냅샷 조회·저장  | 정적 HUG 규칙 JSON으로 폴백        |
+| `JUSO_API_KEY`                         | 도로명주소 검색               | 저장된 주소 픽스처 반환            |
+| `BUILDING_API_KEY`                     | 건축HUB 표제부 조회           | 저장된 건축물 픽스처 반환          |
+| `NAVER_CLOVA_OCR_INVOKE_URL`           | CLOVA OCR 엔드포인트          | OCR API가 `503` 반환               |
+| `NAVER_CLOVA_OCR_SECRET`               | CLOVA OCR 인증                | OCR API가 `503` 반환               |
+| `OCR_RATE_LIMIT_PER_IP_PER_HOUR`       | IP별 시간당 OCR 제한          | 기본값 `5`                         |
+| `OCR_RATE_LIMIT_DAILY_TOTAL`           | 프로세스별 일일 OCR 제한      | 기본값 `30`                        |
+| `GEMINI_API_KEY`                       | 상담용 요약 문장 정리         | 결정론적 템플릿 보고서 반환        |
+| `USE_FIXTURES=1`                       | 주소·건축물 API 픽스처 강제   | 설정하지 않으면 API 키 유무로 결정 |
+
+`JUSO_API_KEY` 또는 `BUILDING_API_KEY` 없이 조회하면 검색어와 무관한 고정 샘플이 반환됩니다. UI와 판정 로직 개발에는 쓸 수 있지만 실제 매물 검증이나 QA에는 반드시 실 API 키를 사용해야 합니다. API 응답의 `fixtures` 값으로 픽스처 사용 여부를 확인할 수 있습니다.
+
+`.env.local`은 커밋하지 않습니다.
+
+## 판정 흐름
+
+1. `/api/address`와 `/api/building`이 주소와 건축물 정보를 구성합니다.
+2. 등기부는 직접 입력하거나 `/api/ocr`이 만든 초안을 사용자가 확인·수정합니다. 원본 파일과 OCR 원문은 저장하지 않습니다.
+3. `/api/check`가 먼저 진단자료 충분성 검사를 수행합니다.
+4. 자료가 부족하거나 서로 맞지 않으면 상품·보증 판정을 실행하지 않고 `INSUFFICIENT`를 반환합니다.
+5. 자료가 충분하면 활성 HUG 규칙팩으로 `KB_STAR_HUG` 경로를 판정합니다.
+6. 로그인 사용자의 입력과 결과만 `diagnosis_cases`에 저장합니다.
+7. 다음 행동은 결과에서 순수 계산하며, 상담 요약은 명시적 동의 후에만 생성합니다.
+
+응답은 과거 다중 경로 형식과의 호환을 위해 `pathResults` 배열을 유지하지만 현재 원소는 HUG 경로 하나입니다.
+
+### 규칙팩 선택 순서
+
+1. Supabase의 활성 스냅샷: `SUPABASE_SNAPSHOT`
+2. DB 조회는 성공했지만 활성 행이 없는 최초 실행에서 KB/HUG 공식 페이지 크롤링: `CRAWLED`
+3. DB 오류 또는 크롤링 실패 시 `src/rules/kb-hug.json` + `src/rules/hug-guarantee.json`: `FALLBACK_JSON`
+
+성공적으로 크롤링한 규칙은 `save_rule_snapshot` RPC로 원자적으로 활성화합니다. 이전 스냅샷은 감사 이력으로 남고 최신 한 건만 `active=true`가 됩니다. 자료 충분성 단계에서 판정을 중단한 요청은 외부 크롤링을 실행하지 않습니다.
+
+## API
+
+| 메서드·경로             | 요청                                         | 주요 응답/동작                                                  |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| `POST /api/address`     | `{ address }`                                | `{ candidates, notes, fixtures }`                               |
+| `POST /api/building`    | `{ juso }`                                   | `{ property, lot, housing, notes, fixtures }`                   |
+| `POST /api/ocr`         | `multipart/form-data`의 `file`               | `{ draft }`, 최대 10MB PDF/JPG/PNG                              |
+| `POST /api/check`       | `CheckRequest` (`DiagnosisCase`)             | `{ pathResults, ruleVersion, ruleSource, actionPlan, caseId? }` |
+| `POST /api/report`      | `{ pathResults, diagnosis?, consent: true }` | `{ report, llm }`; 동의 필수                                    |
+| `GET /api/rules`        | 없음                                         | 현재 HUG 규칙팩과 크롤링 검증 정보                              |
+| `GET /api/cases`        | 로그인 세션                                  | 로그인 사용자의 진단 이력                                       |
+| `GET /api/cases/:id`    | 로그인 세션                                  | 본인 진단 상세                                                  |
+| `DELETE /api/cases/:id` | 로그인 세션                                  | 본인 진단 삭제                                                  |
+
+인증 확인과 데이터 소유권은 서버와 Supabase RLS에서 함께 검사합니다. `/auth/confirm`과 `/auth/signout`은 이메일 인증 완료 및 로그아웃 흐름에 사용됩니다.
+
+## 프로젝트 구조
+
+```text
+src/app/                 페이지, 인증 콜백, Route Handlers
+src/features/intake/     입력 스키마·매핑·폼 필드
+src/features/building/   주소/건축물 매핑과 개발용 픽스처
+src/features/registry/   등기부 OCR 파싱과 사용자 확인 UI
+src/features/result/     결과 정규화·표시·다음 행동·보고서 포맷
+src/lib/rule-engine/     자료 충분성 검사와 결정론적 규칙 엔진
+src/lib/crawlers/        공식 페이지 크롤러와 규칙 스냅샷 공급자
+src/lib/supabase/        서버/브라우저 Supabase 클라이언트
+src/lib/gemini/          선택적 상담 요약 클라이언트
+src/rules/               정적 규칙팩 JSON
+src/types/               도메인·규칙·API 타입
+supabase/                전체 스키마와 증분 마이그레이션
+tests/                   TypeScript/Playwright 수동 검사 스크립트
 ```
-src/app/         화면(랜딩·진단 4단계) + api/ 라우트 6개
-src/features/    intake(F01) · building(F02) · registry(F03) · result
-src/lib/         rule-engine · crawlers · supabase · gemini
-src/types/       case · rule · api — 전원 `@/types` 배럴로 import
-src/rules/       규칙팩 JSON (폴백)
-supabase/        DB 스키마
+
+세부 코드 규칙과 규칙 추가 절차는 [CLAUDE.md](CLAUDE.md), 영역별 구현 메모는 [TEAM_GUIDE.md](TEAM_GUIDE.md)를 참고하세요. 두 문서의 진행 상태 표보다 실행 코드와 이 README의 현재 범위를 우선합니다.
+
+## Supabase 설정
+
+새 프로젝트는 SQL Editor에서 `supabase/schema.sql`을 실행한 뒤 URL, publishable key, service role key를 `.env.local`에 설정합니다. 기존 프로젝트는 `supabase/migrations/`의 변경을 순서대로 적용합니다.
+
+- `diagnosis_cases`: RLS로 로그인 사용자가 본인 행만 조회·삭제
+- `rule_snapshots`: 공개 클라이언트에서 차단하고 서버의 service role만 조회·저장
+- 상담용 보고서 텍스트, 업로드한 등기부 원본, OCR 원문은 저장하지 않음
+
+## 수동 검사
+
+수동 TypeScript 검사는 `tsx`로 실행합니다(`tsx`는 현재 devDependency가 아니므로 필요 시 별도 준비).
+
+```bash
+npx tsx --tsconfig tsconfig.json tests/mapper.manual.ts
+npx tsx --tsconfig tsconfig.json tests/sufficiency.manual.ts
+npx tsx --tsconfig tsconfig.json tests/f10-f11.manual.ts
 ```
 
-폴더별 담당·규칙 추가법·API 실호출 주의사항은 **[TEAM_GUIDE.md](TEAM_GUIDE.md)** 참조.
-코딩 규칙(고정 스택·절대 규칙)은 **[CLAUDE.md](CLAUDE.md)** 참조.
+UI 흐름 검사는 개발 서버와 테스트용 Supabase 계정이 필요합니다.
 
-## API 계약
+```bash
+npx playwright install chromium
+UI_TEST_EMAIL=... UI_TEST_PASSWORD=... npx tsx --tsconfig tsconfig.json tests/ui-flow.manual.ts
+```
 
-| 라우트               | body → 응답                                                  |
-| -------------------- | ------------------------------------------------------------ |
-| `POST /api/address`  | `{ address }` → `{ candidates: JusoItem[], notes }`          |
-| `POST /api/building` | `{ juso }` → `{ property, housing, notes }`                  |
-| `POST /api/check`    | `DiagnosisCase` → `{ pathResults, ruleVersion, ruleSource }` |
-| `POST /api/ocr`      | `multipart/form-data { file: PDF\|JPG\|PNG }` → `{ draft }`  |
-| `POST /api/report`   | `{ pathResults }` → `{ report, llm }`                        |
-| `GET /api/rules`     | 현재 규칙팩 + 공식 페이지별 HTTP·문구 검증 결과 (`crawl`)    |
+PowerShell에서는 환경변수를 `$env:UI_TEST_EMAIL`, `$env:UI_TEST_PASSWORD`로 설정합니다.
 
 ## Vercel 배포
 
+Vercel에서 저장소를 Next.js 프로젝트로 가져오고 위 환경변수를 등록합니다. `NEXT_PUBLIC_` 변수는 빌드 시 포함되므로 변경 후 재배포해야 합니다.
+
+- 운영 환경에는 `USE_FIXTURES`를 설정하지 않습니다.
+- 주소·공공데이터 API 키의 도메인/IP 제한에 배포 도메인이 허용되어야 합니다.
+- OCR과 규칙 조회 라우트는 외부 호출 때문에 최대 실행 시간이 60초로 설정되어 있습니다.
+- `main` 배포와 PR 프리뷰 정책은 연결한 Vercel 프로젝트 설정을 따릅니다.
+
 저장소: https://github.com/HyejunKoo/kb-hug-jeonse-check
-
-1. vercel.com → Add New Project → repo import (Next.js 자동 감지, `vercel.json` 불필요)
-2. Settings → Environment Variables 에 아래 입력
-
-   | 키                                     | 필수                                            |
-   | -------------------------------------- | ----------------------------------------------- |
-   | `NEXT_PUBLIC_SUPABASE_URL`             | 로그인·저장 쓸 때                               |
-   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 로그인·사용자 판정 저장에 필요                  |
-   | `SUPABASE_SERVICE_ROLE_KEY`            | 규칙 스냅샷 서버 조회·저장에 필요               |
-   | `JUSO_API_KEY`                         | 주소 검색                                       |
-   | `BUILDING_API_KEY`                     | 건축물대장 조회                                 |
-   | `NAVER_CLOVA_OCR_INVOKE_URL`           | 등기부 OCR                                      |
-   | `NAVER_CLOVA_OCR_SECRET`               | 등기부 OCR                                      |
-   | `OCR_RATE_LIMIT_PER_IP_PER_HOUR`       | OCR 시간당 제한                                 |
-   | `OCR_RATE_LIMIT_DAILY_TOTAL`           | OCR 일일 제한                                   |
-   | `GEMINI_API_KEY`                       | 미발급 — 넣지 않아도 됨 (템플릿 리포트로 동작)  |
-
-3. `main` push = 자동 배포, PR 브랜치 = 프리뷰 URL (QA 링크로 사용)
-
-**주의**
-
-- `USE_FIXTURES` 는 Vercel에 넣지 말 것. 값이 있으면 어떤 주소를 검색해도 고정 샘플이 나온다
-- `NEXT_PUBLIC_` 키는 빌드 타임에 인라인된다. env 추가 후 **재배포** 필요
-- 공공 API 키에 **IP·도메인 제한**이 걸려 있으면 Vercel에서 실패한다.
-  juso.go.kr 승인키에 배포 도메인을 등록하고, data.go.kr 활용신청의 IP 제한 여부를 확인할 것
-- 각 route에 `export const maxDuration` 설정됨 (Hobby 플랜 기본 10초 타임아웃 대비)
-
-## Supabase 세팅
-
-1. supabase.com 프로젝트 생성
-2. SQL Editor에 `supabase/schema.sql` 실행
-3. Project Settings → API 에서 URL·publishable 키 복사 → env에 입력
-
-`diagnosis_cases`는 RLS가 활성화되어 있고 사용자 세션을 가진 publishable-key 클라이언트로 본인 행만 접근한다.
-`rule_snapshots`는 공개 클라이언트에 노출하지 않고 서버의 `service_role`만 저장·조회한다. 일반 판정 요청은 항상 활성 DB 스냅샷을 먼저 사용한다. DB 조회가 성공했지만 활성 행이 없는 최초 부트스트랩에서만 실크롤링하고, 성공 시 `save_rule_snapshot` RPC가 새 버전을 원자적으로 활성화한다. DB 조회 오류 또는 최초 크롤링 실패 시 정적 JSON으로 폴백한다.
-
-`active`는 개별 규칙의 사용 여부가 아니라 규칙팩 스냅샷 버전 전체의 최신 상태를 뜻한다. 새 공시 버전을 저장하면 이전 스냅샷은 감사 이력으로 `active=false`, 최신 스냅샷 하나만 `active=true`가 되며 고객 판정에는 최신 활성 팩만 사용한다.
-
-## 현재 상태
-
-기능별 완료 현황과 남은 작업은 [TEAM_GUIDE.md §10](TEAM_GUIDE.md#10-지금-상태) 에 정리돼 있다.
-
-실제 공식 페이지 응답과 기획 규칙의 차이, 공개정보로 알 수 없는 값, 확정·미확정 의사결정은
-[CRAWLING_AUDIT.md](CRAWLING_AUDIT.md)에 기록한다.
-
-F05/F06의 일반 판정은 Supabase의 활성 규칙을 `SUPABASE_SNAPSHOT`으로 읽으며 프로세스 메모리 캐시를 사용하지 않는다. 활성 규칙이 한 건도 없을 때만 KB HUG 상품 공시와 HUG 전세금안심대출보증 공시 두 URL을 조회한다. HTTP·필수 문구·수치 추출이 모두 성공하면 본문에서 만든 규칙을 `CRAWLED`로 반환하고 DB에 저장한다. 이때 각 규칙에 추출 시각, 원문 응답 SHA-256, 근거 문구가 포함된다. DB 조회 오류 또는 최초 크롤링 실패 시 `kb-hug.json`과 `hug-guarantee.json`을 `FALLBACK_JSON`으로 사용한다.

@@ -5,7 +5,7 @@ import './globals.css';
 import { getServerSupabase } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
-  title: 'KB 전세 코파일럿 | 계약 전 사전점검',
+  title: 'KB 전세 Check | 계약 전 사전점검',
   description: '계약금 지급 전, 공개요건 기준 사전점검',
 };
 
@@ -38,10 +38,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span aria-hidden className="h-4 w-px bg-slate-200 max-[411px]:hidden" />
               {/* 워드마크만 KB Dark Gray — 노랑 마크와 같은 웜톤이라 로고 옆에서 한 덩어리로 읽힌다 */}
               <span className="whitespace-nowrap text-[13.5px] font-bold tracking-tight text-kbgray-dark max-[411px]:hidden sm:text-[15px]">
-                KB 전세 코파일럿
+                KB 전세 Check
               </span>
             </Link>
-            {/* 좁은 폭에서 '저장 이력'·'전세 코파일럿'이 두 줄로 깨지지 않게 한다.
+            {/* 좁은 폭에서 '저장 이력'·'KB 전세 Check'가 두 줄로 깨지지 않게 한다.
                 항목이 3개라 390px 에서는 btn-ghost 의 px-3 를 그대로 두면 워드마크와 맞닿는다 —
                 sm 미만에서만 좌우 여백을 좁혀 제품명을 지우지 않고 자리를 만든다. */}
             <nav className="flex items-center gap-1 whitespace-nowrap [&_a]:px-2 [&_button]:px-2 sm:[&_a]:px-3 sm:[&_button]:px-3">
